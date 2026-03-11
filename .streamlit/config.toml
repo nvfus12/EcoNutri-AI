@@ -1,0 +1,42 @@
+# ===============================
+# EcoNutri AI Streamlit Config
+# ===============================
+
+[theme]
+
+primaryColor = "#4CAF50"
+backgroundColor = "#F7F9F9"
+secondaryBackgroundColor = "#EAF2F8"
+textColor = "#262730"
+font = "sans serif"
+
+
+[server]
+
+port = 8501
+enableCORS = false
+enableXsrfProtection = true
+maxUploadSize = 20
+headless = true
+
+
+[browser]
+
+gatherUsageStats = false
+serverAddress = "localhost"
+serverPort = 8501
+
+
+[runner]
+
+fastReruns = true
+
+
+[client]
+
+showSidebarNavigation = true
+
+
+[logger]
+
+level = "info"
