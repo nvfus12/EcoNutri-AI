@@ -51,8 +51,6 @@ CREATE TABLE nutrition_reference (
 
     fiber REAL,
 
-    carbon_footprint REAL,
-
     source TEXT
 );
 
@@ -77,8 +75,6 @@ CREATE TABLE nutrition_diary (
     sodium REAL,
     potassium REAL,
     calcium REAL,
-
-    carbon_footprint REAL,
 
     image_path TEXT,
 
