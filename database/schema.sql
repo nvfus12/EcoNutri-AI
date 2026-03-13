@@ -30,7 +30,7 @@ CREATE TABLE user_profile (
 );
 CREATE TABLE nutrition_reference (
 
-    food_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    
 
     food_name TEXT UNIQUE,
 
@@ -75,6 +75,11 @@ CREATE TABLE nutrition_diary (
     sodium REAL,
     potassium REAL,
     calcium REAL,
+
+    vitamin_a REAL,
+    vitamin_b REAL,
+    vitamin_c REAL,
+    vitamin_d REAL,
 
     image_path TEXT,
 
