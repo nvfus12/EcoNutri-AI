@@ -1,0 +1,26 @@
+app:
+  name: EcoNutri
+  version: 0.1
+  debug: true
+
+paths:
+  database: database/econutri.db
+  assets: assets
+  uploads: data/uploads
+  models: models
+
+vision:
+  model_path: models/yolo_food.pt
+  confidence_threshold: 0.5
+  iou_threshold: 0.4
+
+nutrition:
+  default_portion: 100
+  max_daily_calories: 2500
+
+streamlit:
+  page_title: EcoNutri AI
+  layout: wide
+
+logging:
+  level: INFO
