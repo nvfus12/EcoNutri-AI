@@ -216,3 +216,6 @@ __marimo__/
 
 # Thư mục cache của Hugging Face hoặc hệ thống
 .cache/
+
+*.bin
+*.pickle

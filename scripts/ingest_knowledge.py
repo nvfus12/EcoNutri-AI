@@ -12,7 +12,7 @@ from sentence_transformers import SentenceTransformer
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 PDF_FOLDER = os.path.join(BASE_DIR, "data", "knowledges")
-DB_PATH = os.path.join(BASE_DIR, "database")
+DB_PATH = os.path.join(BASE_DIR, "database", "vector_store")
 
 # =============================
 # EMBEDDING MODEL
