@@ -209,3 +209,10 @@ __marimo__/
 # Database files
 *.db
 *.sqlite3
+
+# Các file trọng số AI (thường rất nặng)
+*.pt
+*.gguf
+
+# Thư mục cache của Hugging Face hoặc hệ thống
+.cache/
