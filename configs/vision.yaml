@@ -1,0 +1,18 @@
+model:
+  weights_path: "weights/yolo_26n_best.pt"
+  conf_threshold: 0.3
+  iou_threshold: 0.45
+  img_size: 640
+
+inference:
+  device: "cpu"         # Tối ưu Green AI, không cần GPU đắt tiền
+  save_result: true
+  result_dir: "data/user_images/processed"
+
+# Mapping nhãn YOLO -> Tên trong Database nutrition_reference
+# Giúp khớp dữ liệu khi tra cứu SQL
+label_mapping:
+  "pho": "Phở Bò"
+  "bun_cha": "Bún Chả"
+  "com_tam": "Cơm Tấm"
+  "banh_mi": "Bánh Mì"
