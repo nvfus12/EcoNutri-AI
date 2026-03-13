@@ -1,8 +1,18 @@
 import os
+import uuid
 import pdfplumber
 import chromadb
 
 from sentence_transformers import SentenceTransformer
+
+# =============================
+# PROJECT ROOT PATH
+# =============================
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+PDF_FOLDER = os.path.join(BASE_DIR, "data", "knowledges")
+DB_PATH = os.path.join(BASE_DIR, "database")
 
 # =============================
 # EMBEDDING MODEL
@@ -14,7 +24,7 @@ model = SentenceTransformer("BAAI/bge-base-en-v1.5")
 # VECTOR DATABASE
 # =============================
 
-client = chromadb.PersistentClient(path="database")
+client = chromadb.PersistentClient(path=DB_PATH)
 
 collection = client.get_or_create_collection(
     name="nutrition_knowledge"
@@ -24,7 +34,7 @@ collection = client.get_or_create_collection(
 # CHUNK FUNCTION
 # =============================
 
-def chunk_text(text, chunk_size=500, overlap=100):
+def chunk_text(text, chunk_size=800, overlap=150):
 
     chunks = []
     start = 0
@@ -51,6 +61,8 @@ def process_pdf(file_path):
     metadatas = []
     ids = []
 
+    file_name = os.path.basename(file_path)
+
     with pdfplumber.open(file_path) as pdf:
 
         for page_number, page in enumerate(pdf.pages):
@@ -64,14 +76,16 @@ def process_pdf(file_path):
 
             for i, chunk in enumerate(chunks):
 
-                doc_id = f"{page_number}_{i}"
+                # Unique ID
+                doc_id = f"{file_name}_{page_number}_{i}"
 
                 documents.append(chunk)
 
                 metadatas.append({
-                    "source": os.path.basename(file_path),
-                    "topic": "nutrition",
-                    "page": page_number + 1
+                    "source": file_name,
+                    "page": page_number + 1,
+                    "chunk": i,
+                    "topic": "nutrition"
                 })
 
                 ids.append(doc_id)
@@ -83,16 +97,19 @@ def process_pdf(file_path):
 # LOAD PDF FOLDER
 # =============================
 
-pdf_folder = "../data/knowledges"
 all_docs = []
 all_meta = []
 all_ids = []
 
-for file in os.listdir(pdf_folder):
+print("Loading PDFs from:", PDF_FOLDER)
+
+for file in os.listdir(PDF_FOLDER):
 
     if file.endswith(".pdf"):
 
-        path = os.path.join(pdf_folder, file)
+        path = os.path.join(PDF_FOLDER, file)
+
+        print("Processing:", file)
 
         docs, meta, ids = process_pdf(path)
 
@@ -100,18 +117,26 @@ for file in os.listdir(pdf_folder):
         all_meta.extend(meta)
         all_ids.extend(ids)
 
+print("Total chunks:", len(all_docs))
+
 # =============================
-# CREATE EMBEDDING
+# CREATE EMBEDDINGS
 # =============================
+
+print("Creating embeddings...")
 
 embeddings = model.encode(
     ["passage: " + d for d in all_docs],
+    normalize_embeddings=True,
+    batch_size=32,
     show_progress_bar=True
 )
 
 # =============================
-# SAVE TO VECTOR DB
+# STORE IN CHROMADB
 # =============================
+
+print("Storing vectors...")
 
 collection.add(
     documents=all_docs,
@@ -120,4 +145,5 @@ collection.add(
     ids=all_ids
 )
 
-print("Data stored in database/")
+print("✅ Data stored successfully in:", DB_PATH)
+print("Total stored:", len(all_docs))
