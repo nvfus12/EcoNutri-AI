@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     
     # --- CẤU HÌNH AI MODELS ---
     # YOLO Model
-    YOLO_MODEL_PATH: Path = ROOT_DIR / "weights" / "yolo_26n_best.pt"
+    YOLO_MODEL_PATH: Path = ROOT_DIR / "weights" / "yolo26n_best.pt"
     YOLO_CONFIDENCE: float = 0.45
     
     # Local LLM (Qwen via llama-cpp-python)
