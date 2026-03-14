@@ -1,5 +1,4 @@
 import os
-import uuid
 import pdfplumber
 import chromadb
 
@@ -18,7 +17,12 @@ DB_PATH = os.path.join(BASE_DIR, "database", "vector_store")
 # EMBEDDING MODEL
 # =============================
 
-model = SentenceTransformer("BAAI/bge-base-en-v1.5")
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+ENCODE_BATCH_SIZE = 16
+UPSERT_CHUNK_SIZE = 128
+
+print("Loading embedding model:", EMBEDDING_MODEL)
+model = SentenceTransformer(EMBEDDING_MODEL, device="cpu")
 
 # =============================
 # VECTOR DATABASE
@@ -123,27 +127,35 @@ print("Total chunks:", len(all_docs))
 # CREATE EMBEDDINGS
 # =============================
 
-print("Creating embeddings...")
+print("Creating embeddings and upserting to ChromaDB...")
 
-embeddings = model.encode(
-    ["passage: " + d for d in all_docs],
-    normalize_embeddings=True,
-    batch_size=32,
-    show_progress_bar=True
-)
+total = len(all_docs)
+stored = 0
 
-# =============================
-# STORE IN CHROMADB
-# =============================
+for start in range(0, total, UPSERT_CHUNK_SIZE):
+    end = min(start + UPSERT_CHUNK_SIZE, total)
 
-print("Storing vectors...")
+    docs_chunk = all_docs[start:end]
+    meta_chunk = all_meta[start:end]
+    ids_chunk = all_ids[start:end]
 
-collection.add(
-    documents=all_docs,
-    embeddings=embeddings,
-    metadatas=all_meta,
-    ids=all_ids
-)
+    embeddings_chunk = model.encode(
+        ["passage: " + d for d in docs_chunk],
+        normalize_embeddings=True,
+        batch_size=ENCODE_BATCH_SIZE,
+        show_progress_bar=False
+    )
+
+    # upsert để có thể chạy lại nhiều lần mà không bị lỗi duplicate id
+    collection.upsert(
+        documents=docs_chunk,
+        embeddings=embeddings_chunk,
+        metadatas=meta_chunk,
+        ids=ids_chunk
+    )
+
+    stored += len(docs_chunk)
+    print(f"Upserted {stored}/{total} chunks...")
 
 print("✅ Data stored successfully in:", DB_PATH)
-print("Total stored:", len(all_docs))
+print("Total stored/upserted:", stored)

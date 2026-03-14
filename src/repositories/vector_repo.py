@@ -16,9 +16,9 @@ class VectorRepository:
 
     def __init__(
         self,
-        db_path="database",
+        db_path="database/vector_store",
         collection_name="nutrition_knowledge",
-        embedding_model="BAAI/bge-base-en-v1.5"
+        embedding_model="sentence-transformers/all-MiniLM-L6-v2"
     ):
         """
         Initialize vector database and embedding model

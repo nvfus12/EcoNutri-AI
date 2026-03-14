@@ -141,6 +141,74 @@ class SQLRepository:
             conn.commit()
             return cursor.lastrowid
 
+    def upsert_user_profile(self, user_id: int, user_data: Dict[str, Any]) -> int:
+        """Tạo mới hoặc cập nhật hồ sơ người dùng theo user_id."""
+        safe_data = {
+            "name": user_data.get("name", "User"),
+            "age": int(user_data.get("age", 0) or 0),
+            "gender": user_data.get("gender", "other"),
+            "height_cm": float(user_data.get("height_cm", 0) or 0),
+            "weight_kg": float(user_data.get("weight_kg", 0) or 0),
+            "job": user_data.get("job", ""),
+            "activity_level": user_data.get("activity_level", "sedentary"),
+            "allergies": user_data.get("allergies", ""),
+            "medical_conditions": user_data.get("medical_conditions", ""),
+            "goal": user_data.get("goal", "maintain"),
+            "bmi": user_data.get("bmi"),
+            "bmr": user_data.get("bmr"),
+            "tdee": user_data.get("tdee"),
+            "body_fat_percent": user_data.get("body_fat_percent"),
+            "location": user_data.get("location", "Ho Chi Minh"),
+        }
+
+        existing = self.get_user_profile(user_id)
+
+        if existing:
+            update_query = """
+                UPDATE user_profile
+                SET name = :name,
+                    age = :age,
+                    gender = :gender,
+                    height_cm = :height_cm,
+                    weight_kg = :weight_kg,
+                    job = :job,
+                    activity_level = :activity_level,
+                    allergies = :allergies,
+                    medical_conditions = :medical_conditions,
+                    goal = :goal,
+                    bmi = :bmi,
+                    bmr = :bmr,
+                    tdee = :tdee,
+                    body_fat_percent = :body_fat_percent,
+                    location = :location
+                WHERE user_id = :user_id
+            """
+            payload = {**safe_data, "user_id": user_id}
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(update_query, payload)
+                conn.commit()
+            return user_id
+
+        insert_query = """
+            INSERT INTO user_profile (
+                user_id, name, age, gender, height_cm, weight_kg, job,
+                activity_level, allergies, medical_conditions, goal,
+                bmi, bmr, tdee, body_fat_percent, location
+            )
+            VALUES (
+                :user_id, :name, :age, :gender, :height_cm, :weight_kg, :job,
+                :activity_level, :allergies, :medical_conditions, :goal,
+                :bmi, :bmr, :tdee, :body_fat_percent, :location
+            )
+        """
+        payload = {**safe_data, "user_id": user_id}
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(insert_query, payload)
+            conn.commit()
+        return user_id
+
     def get_user_profile(self, user_id: int) -> Optional[Dict[str, Any]]:
         query = "SELECT * FROM user_profile WHERE user_id = ?"
         with self.get_connection() as conn:
