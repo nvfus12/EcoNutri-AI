@@ -112,6 +112,28 @@ class LocalLLMEngine:
             return 0.0
 
     @staticmethod
+    def _extract_weight_goal_kg(query: str) -> tuple[float | None, float | None]:
+        """Tách mục tiêu cân nặng dạng 'từ 50 cân xuống 48 cân' hoặc '50kg -> 48kg'."""
+        if not query:
+            return None, None
+
+        text = query.lower().replace(",", ".")
+
+        patterns = [
+            r"tu\s*(\d+(?:\.\d+)?)\s*(?:kg|kilo|c[aâ]n)?\s*(?:xuong|xuong|ve|về|->|to)\s*(\d+(?:\.\d+)?)\s*(?:kg|kilo|c[aâ]n)?",
+            r"(\d+(?:\.\d+)?)\s*(?:kg|kilo|c[aâ]n)\s*(?:xuong|xuong|ve|về|->|to)\s*(\d+(?:\.\d+)?)\s*(?:kg|kilo|c[aâ]n)",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                start_w = float(match.group(1))
+                target_w = float(match.group(2))
+                return start_w, target_w
+
+        return None, None
+
+    @staticmethod
     def _strip_chinese_chars(text: str) -> str:
         """Loại bỏ tuyệt đối ký tự Trung Quốc khỏi câu trả lời."""
         if not text:
@@ -134,6 +156,7 @@ class LocalLLMEngine:
 
     def _build_monthly_weekly_plan(
         self,
+        query: str,
         profile: Dict[str, Any],
         seasonal: Dict[str, Any],
         metadatas: list,
@@ -145,6 +168,21 @@ class LocalLLMEngine:
         goal = profile.get("goal") or "lose"
         activity_level = profile.get("activity_level") or "sedentary"
         tdee = self._safe_float(profile.get("tdee"))
+        start_weight, target_weight = self._extract_weight_goal_kg(query)
+
+        # fallback lấy từ hồ sơ nếu prompt không nói rõ
+        if start_weight is None:
+            current_w = self._safe_float(profile.get("weight_kg"))
+            if current_w > 0:
+                start_weight = current_w
+        if target_weight is None and start_weight is not None:
+            target_weight = max(start_weight - 1.0, 35.0)
+
+        total_loss = None
+        weekly_delta = None
+        if start_weight is not None and target_weight is not None and start_weight > target_weight:
+            total_loss = round(start_weight - target_weight, 2)
+            weekly_delta = round(total_loss / 4, 2)
 
         if tdee > 0:
             calorie_target = int(max(1200, tdee - 350))
@@ -163,8 +201,15 @@ class LocalLLMEngine:
         plan = [
             "1) Mục tiêu 1 tháng:",
             (
-                f"- Mục tiêu đề xuất: tối ưu thành phần cơ thể theo hướng {goal}, "
-                f"duy trì năng lượng khoảng {calorie_target} kcal/ngày và tăng thói quen vận động đều."
+                (
+                    f"- Mục tiêu đề xuất: từ {start_weight:.1f} kg xuống {target_weight:.1f} kg trong 4 tuần "
+                    f"(giảm khoảng {total_loss:.1f} kg), duy trì khoảng {calorie_target} kcal/ngày."
+                )
+                if total_loss is not None
+                else (
+                    f"- Mục tiêu đề xuất: tối ưu thành phần cơ thể theo hướng {goal}, "
+                    f"duy trì năng lượng khoảng {calorie_target} kcal/ngày và tăng thói quen vận động đều."
+                )
             ),
             "",
             "2) Kế hoạch 4 tuần:",
@@ -172,20 +217,37 @@ class LocalLLMEngine:
                 f"- Tuần 1: Ổn định nề nếp ăn. Calories mục tiêu ~{calorie_target} kcal/ngày. "
                 "Thực đơn mẫu: sáng (yến mạch + trứng), trưa (cơm vừa + đạm nạc + rau), "
                 "tối (đạm nhẹ + rau + canh). Vận động: đi bộ nhanh 25-30 phút/ngày. "
-                "Theo dõi: cân nặng, vòng bụng, mức đói buổi tối."
+                + (
+                    f"Theo dõi: cân nặng mục tiêu cuối tuần ~{(start_weight - weekly_delta):.1f} kg, vòng bụng, mức đói buổi tối."
+                    if weekly_delta is not None and start_weight is not None
+                    else "Theo dõi: cân nặng, vòng bụng, mức đói buổi tối."
+                )
             ),
             (
                 f"- Tuần 2: Tăng chất lượng khẩu phần. Duy trì ~{calorie_target} kcal/ngày, "
                 f"ưu tiên {veg_text}. Vận động: 3 buổi sức mạnh nhẹ + 2 buổi cardio. "
-                "Theo dõi: năng lượng ban ngày, chất lượng giấc ngủ."
+                + (
+                    f"Theo dõi: cân nặng mục tiêu cuối tuần ~{(start_weight - 2 * weekly_delta):.1f} kg, năng lượng ban ngày, chất lượng giấc ngủ."
+                    if weekly_delta is not None and start_weight is not None
+                    else "Theo dõi: năng lượng ban ngày, chất lượng giấc ngủ."
+                )
             ),
             (
                 "- Tuần 3: Củng cố kỷ luật. Giữ tỉ lệ đạm cao hơn, giảm đồ ngọt nước và đồ chiên. "
-                "Vận động: tăng tổng bước chân thêm 10-15%. Theo dõi: tiến độ cân nặng theo tuần."
+                + (
+                    f"Vận động: tăng tổng bước chân thêm 10-15%. Theo dõi: cân nặng mục tiêu cuối tuần ~{(start_weight - 3 * weekly_delta):.1f} kg."
+                    if weekly_delta is not None and start_weight is not None
+                    else "Vận động: tăng tổng bước chân thêm 10-15%. Theo dõi: tiến độ cân nặng theo tuần."
+                )
             ),
             (
                 f"- Tuần 4: Tối ưu và duy trì. Lồng ghép linh hoạt món địa phương ({spec_text}) theo khẩu phần nhỏ, "
-                "không phá vỡ tổng calories. Theo dõi: so sánh số đo đầu-tháng/cuối-tháng để chốt kế hoạch tháng sau."
+                + (
+                    f"không phá vỡ tổng calories. Mục tiêu cuối tháng ~{target_weight:.1f} kg. "
+                    "So sánh số đo đầu-tháng/cuối-tháng để chốt kế hoạch tháng sau."
+                    if target_weight is not None
+                    else "không phá vỡ tổng calories. Theo dõi: so sánh số đo đầu-tháng/cuối-tháng để chốt kế hoạch tháng sau."
+                )
             ),
             "",
             "3) Lý do khoa học:",
@@ -276,6 +338,7 @@ class LocalLLMEngine:
 
         if weekly_mode:
             return self._strip_chinese_chars(self._build_monthly_weekly_plan(
+                query=query,
                 profile=profile,
                 seasonal=seasonal,
                 metadatas=metadatas,
