@@ -3,9 +3,12 @@ import os
 from datetime import datetime
 from ultralytics import YOLO
 from src.schemas.vision_schema import VisionResult, FoodDetection
+from src.core.config import settings
 
 class VisionEngine:
-    def __init__(self, config_path: str = "configs/vision.yaml"):
+    def __init__(self, config_path: str = None):
+        if config_path is None:
+            config_path = str(settings.BASE_DIR / "configs" / "vision.yaml")
         # Load cấu hình từ file YAML
         with open(config_path, 'r', encoding='utf-8') as f:
             self.config = yaml.safe_load(f)

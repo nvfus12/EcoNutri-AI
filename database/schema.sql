@@ -30,8 +30,6 @@ CREATE TABLE user_profile (
 );
 CREATE TABLE nutrition_reference (
 
-    
-
     food_name TEXT UNIQUE,
     serving_size TEXT,
 
@@ -81,6 +79,8 @@ CREATE TABLE nutrition_diary (
     vitamin_b REAL,
     vitamin_c REAL,
     vitamin_d REAL,
+
+    fiber REAL
 
     image_path TEXT,
 

@@ -6,6 +6,7 @@ class FoodDetection(BaseModel):
     # Khớp 100% với các cột trong SQL nutrition_reference
     food_name: str
     confidence: float = 0.0
+    serving_size: Optional[float] = 0.0
     
     calories: Optional[float] = 0.0
     protein: Optional[float] = 0.0
@@ -34,6 +35,7 @@ class VisionResult(BaseModel):
     
     image_width: Optional[int] = None
     image_height: Optional[int] = None
+    image_path: Optional[str] = None
     processed_at: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     def update_totals(self):

@@ -42,7 +42,9 @@ class ContextOrchestrator:
         for item in vision_res.detected_items:
             data = self.sql_repo.get_nutrition_ref(item.food_name)
             if data:
-                for key, val in data.items(): setattr(item, key, val)
+                for key, val in data.items():
+                    if hasattr(item, key):  # Chốt chặn an toàn: Chỉ gán nếu trường tồn tại trong Schema
+                        setattr(item, key, val)
         
         vision_res.update_totals()
         
@@ -88,16 +90,26 @@ class ContextOrchestrator:
         
         # 5. Thực thi LLM (Qwen 2.5/3.5 GGUF)
         if self.llm_engine is not None:
-            answer = self.llm_engine.generate(user_query, context)
-            if answer and str(answer).strip():
-                return answer
-            return "LLM đã xử lý nhưng chưa tạo được câu trả lời. Bạn thử hỏi cụ thể hơn về mục tiêu dinh dưỡng nhé."
+            # Trả về stream và context để UI xử lý hậu kỳ (gắn suffix)
+            answer_stream = self.llm_engine.generate_stream(user_query, context)
+            return (answer_stream, context)
 
-        veg_names = [item.get("food_name") for item in seasonal_info.get("vegetables", [])][:3]
-        specialty_names = [item.get("food_name") for item in seasonal_info.get("specialties", [])][:3]
-        return (
-            "Hệ thống đang chạy fallback vì chưa nạp LLM engine. "
-            f"Vùng: {seasonal_info.get('region_code')} - Mùa: {seasonal_info.get('season')}. "
-            f"Rau gợi ý: {', '.join(veg_names) if veg_names else 'chưa có dữ liệu'}. "
-            f"Đặc sản gợi ý: {', '.join(specialty_names) if specialty_names else 'chưa có dữ liệu'}."
-        )
+        # Fallback nếu LLM engine không có sẵn
+        def fallback_stream():
+            veg_names = [item.get("food_name") for item in seasonal_info.get("vegetables", [])][:3]
+            specialty_names = [item.get("food_name") for item in seasonal_info.get("specialties", [])][:3]
+            fallback_text = (
+                "Hệ thống đang chạy fallback vì chưa nạp LLM engine. "
+                f"Vùng: {seasonal_info.get('region_code')} - Mùa: {seasonal_info.get('season')}. "
+                f"Rau gợi ý: {', '.join(veg_names) if veg_names else 'chưa có dữ liệu'}. "
+                f"Đặc sản gợi ý: {', '.join(specialty_names) if specialty_names else 'chưa có dữ liệu'}."
+            )
+            yield fallback_text
+        
+        return (fallback_stream(), {})
+
+    def get_advice_suffix(self, context):
+        """Lấy phần phụ lục (citations, warnings) từ LLM engine."""
+        if self.llm_engine and context:
+            return self.llm_engine.get_response_suffix(context)
+        return ""
