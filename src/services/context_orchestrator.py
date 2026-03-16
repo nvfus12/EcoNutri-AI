@@ -1,8 +1,10 @@
 from pathlib import Path
 from src.repositories.sql_repo import SQLRepository
+from src.repositories.nutrition_fact_repo import NutritionFactRepository
 from src.utils.image_processor import ImageProcessor
 from src.services.user_service import UserService
 from src.services.safety_router import SafetyRouter
+import re
 
 class ContextOrchestrator:
     def __init__(self, vision_engine, sql_repo, vector_repo, llm_engine):
@@ -13,6 +15,17 @@ class ContextOrchestrator:
         self.img_processor = ImageProcessor()
         self.user_service = UserService()
         self.safety_router = SafetyRouter()
+        self.nutrition_fact_repo = NutritionFactRepository()
+
+    @staticmethod
+    def _is_numeric_nutrition_query(text: str) -> bool:
+        lowered = (text or "").lower()
+        return bool(
+            re.search(
+                r"\b(calo|kcal|protein|carb|fat|chat\s*beo|chat\s*dam|bao\s*nhieu|dinh\s*duong)\b",
+                lowered,
+            )
+        )
 
     def process_full_vision_flow(self, raw_image_path: str, user_id: int):
         """Luồng 2B: Tiền xử lý -> Nhận diện -> Đối chiếu DB -> Lưu Diary"""
@@ -84,6 +97,17 @@ class ContextOrchestrator:
                 "ids": [],
                 "notice": "Vector repository chưa khởi tạo, đang chạy chế độ không RAG.",
             }
+
+        structured_facts = self.nutrition_fact_repo.search_by_query(user_query, limit=5)
+
+        # Với câu hỏi cần số liệu mà không có dữ liệu tin cậy thì không gọi LLM để tránh bịa số.
+        if self._is_numeric_nutrition_query(user_query):
+            has_docs = bool(kb_context.get("documents"))
+            if not structured_facts and not has_docs:
+                return (
+                    "Data not available: Hiện chưa có dữ liệu định lượng đáng tin cậy cho truy vấn này. "
+                    "Vui lòng bổ sung nguồn bảng dinh dưỡng (CSV/JSON) hoặc tài liệu chuẩn trước khi tư vấn số liệu."
+                )
         
         # 4. Hợp nhất ngữ cảnh thành Prompt (Dựa trên configs/prompts.yaml)
         context = {
@@ -92,6 +116,7 @@ class ContextOrchestrator:
             "current_meal": current_vision_res.dict() if current_vision_res else "N/A",
             "seasonal_tips": seasonal_info,
             "medical_knowledge": kb_context,
+            "structured_facts": structured_facts,
             "recent_chat": (recent_chat or [])[-8:],
         }
         
