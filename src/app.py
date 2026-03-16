@@ -72,6 +72,10 @@ st.markdown(
             border-radius: 14px;
             padding: 12px;
         }
+
+        .main .block-container {
+            padding-bottom: 24px;
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -154,146 +158,10 @@ class LocalLLMEngine:
         text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
         return text
 
-    def _build_monthly_weekly_plan(
-        self,
-        query: str,
-        profile: Dict[str, Any],
-        seasonal: Dict[str, Any],
-        metadatas: list,
-        has_internal_docs: bool,
-        missing_fields_vi: list[str],
-    ) -> str:
-        age = int(profile.get("age") or 0)
-        gender = (profile.get("gender") or "other").lower()
-        goal = profile.get("goal") or "lose"
-        activity_level = profile.get("activity_level") or "sedentary"
-        tdee = self._safe_float(profile.get("tdee"))
-        start_weight, target_weight = self._extract_weight_goal_kg(query)
-
-        # fallback lấy từ hồ sơ nếu prompt không nói rõ
-        if start_weight is None:
-            current_w = self._safe_float(profile.get("weight_kg"))
-            if current_w > 0:
-                start_weight = current_w
-        if target_weight is None and start_weight is not None:
-            target_weight = max(start_weight - 1.0, 35.0)
-
-        total_loss = None
-        weekly_delta = None
-        if start_weight is not None and target_weight is not None and start_weight > target_weight:
-            total_loss = round(start_weight - target_weight, 2)
-            weekly_delta = round(total_loss / 4, 2)
-
-        if tdee > 0:
-            calorie_target = int(max(1200, tdee - 350))
-        else:
-            calorie_target = 1700 if gender == "male" else 1500
-
-        # Người < 18 tuổi: ưu tiên an toàn, giảm thâm hụt năng lượng.
-        if 0 < age < 18:
-            calorie_target = max(calorie_target, 1800)
-
-        veg = [x.get("food_name") for x in seasonal.get("vegetables", []) if x.get("food_name")][:3]
-        specs = [x.get("food_name") for x in seasonal.get("specialties", []) if x.get("food_name")][:2]
-        veg_text = ", ".join(veg) if veg else "rau xanh theo mùa"
-        spec_text = ", ".join(specs) if specs else "đặc sản địa phương"
-
-        plan = [
-            "1) Mục tiêu 1 tháng:",
-            (
-                (
-                    f"- Mục tiêu đề xuất: từ {start_weight:.1f} kg xuống {target_weight:.1f} kg trong 4 tuần "
-                    f"(giảm khoảng {total_loss:.1f} kg), duy trì khoảng {calorie_target} kcal/ngày."
-                )
-                if total_loss is not None
-                else (
-                    f"- Mục tiêu đề xuất: tối ưu thành phần cơ thể theo hướng {goal}, "
-                    f"duy trì năng lượng khoảng {calorie_target} kcal/ngày và tăng thói quen vận động đều."
-                )
-            ),
-            "",
-            "2) Kế hoạch 4 tuần:",
-            (
-                f"- Tuần 1: Ổn định nề nếp ăn. Calories mục tiêu ~{calorie_target} kcal/ngày. "
-                "Thực đơn mẫu: sáng (yến mạch + trứng), trưa (cơm vừa + đạm nạc + rau), "
-                "tối (đạm nhẹ + rau + canh). Vận động: đi bộ nhanh 25-30 phút/ngày. "
-                + (
-                    f"Theo dõi: cân nặng mục tiêu cuối tuần ~{(start_weight - weekly_delta):.1f} kg, vòng bụng, mức đói buổi tối."
-                    if weekly_delta is not None and start_weight is not None
-                    else "Theo dõi: cân nặng, vòng bụng, mức đói buổi tối."
-                )
-            ),
-            (
-                f"- Tuần 2: Tăng chất lượng khẩu phần. Duy trì ~{calorie_target} kcal/ngày, "
-                f"ưu tiên {veg_text}. Vận động: 3 buổi sức mạnh nhẹ + 2 buổi cardio. "
-                + (
-                    f"Theo dõi: cân nặng mục tiêu cuối tuần ~{(start_weight - 2 * weekly_delta):.1f} kg, năng lượng ban ngày, chất lượng giấc ngủ."
-                    if weekly_delta is not None and start_weight is not None
-                    else "Theo dõi: năng lượng ban ngày, chất lượng giấc ngủ."
-                )
-            ),
-            (
-                "- Tuần 3: Củng cố kỷ luật. Giữ tỉ lệ đạm cao hơn, giảm đồ ngọt nước và đồ chiên. "
-                + (
-                    f"Vận động: tăng tổng bước chân thêm 10-15%. Theo dõi: cân nặng mục tiêu cuối tuần ~{(start_weight - 3 * weekly_delta):.1f} kg."
-                    if weekly_delta is not None and start_weight is not None
-                    else "Vận động: tăng tổng bước chân thêm 10-15%. Theo dõi: tiến độ cân nặng theo tuần."
-                )
-            ),
-            (
-                f"- Tuần 4: Tối ưu và duy trì. Lồng ghép linh hoạt món địa phương ({spec_text}) theo khẩu phần nhỏ, "
-                + (
-                    f"không phá vỡ tổng calories. Mục tiêu cuối tháng ~{target_weight:.1f} kg. "
-                    "So sánh số đo đầu-tháng/cuối-tháng để chốt kế hoạch tháng sau."
-                    if target_weight is not None
-                    else "không phá vỡ tổng calories. Theo dõi: so sánh số đo đầu-tháng/cuối-tháng để chốt kế hoạch tháng sau."
-                )
-            ),
-            "",
-            "3) Lý do khoa học:",
-            "- Giảm năng lượng vừa phải giúp duy trì cơ và giảm nguy cơ tăng cân trở lại.",
-            "- Chia nhỏ mục tiêu theo tuần giúp dễ theo dõi và điều chỉnh hành vi ăn uống.",
-            "- Kết hợp dinh dưỡng + vận động cho hiệu quả bền vững hơn chỉ siết ăn.",
-            "",
-            "4) Cảnh báo an toàn:",
-            "- Không giảm cân quá nhanh (>1% cân nặng/tuần).",
-            "- Nếu có bệnh nền hoặc mệt kéo dài, cần trao đổi bác sĩ/chuyên gia dinh dưỡng.",
-        ]
-
-        if 0 < age < 18:
-            plan.append("- Người dưới 18 tuổi nên ưu tiên phát triển thể chất, tránh cắt calo quá mạnh.")
-
-        plan.append("")
-        plan.append("5) Trích dẫn nội bộ:")
-        if has_internal_docs and metadatas:
-            cites = []
-            for md in metadatas[:2]:
-                source = md.get("source") if isinstance(md, dict) else None
-                page = md.get("page") if isinstance(md, dict) else None
-                if source:
-                    cites.append(f"- {source}" + (f" (trang {page})" if page else ""))
-            plan.extend(cites if cites else ["- Có dữ liệu nội bộ nhưng chưa xác định được nguồn cụ thể"]) 
-        else:
-            plan.append("- Chưa có tài liệu nội bộ")
-
-        plan.append("")
-        if missing_fields_vi:
-            plan.append(
-                "Dữ liệu người dùng cần bổ sung để cá nhân hóa tốt hơn: " + ", ".join(missing_fields_vi) + "."
-            )
-        else:
-            plan.append("Dữ liệu người dùng đã đủ cơ bản để cá nhân hóa kế hoạch theo tuần.")
-
-        return "\n".join(plan)
-
-    def generate(self, user_query: str, context: Dict[str, Any]) -> str:
-        query = (user_query or "").strip()
-        if query.lower() in {"hi", "hello", "xin chào", "chào", "hey"}:
-            return "Xin chào! Mình là EcoNutri. Bạn muốn tư vấn bữa ăn, giảm cân hay kiểm soát calo hôm nay?"
-
-        normalized = query.lower()
-        intent_text = self._normalize_for_intent(query)
-
+    @staticmethod
+    def _derive_response_mode(query: str) -> Dict[str, Any]:
+        """Suy ra chế độ trả lời theo ngữ cảnh thay vì hard route cứng."""
+        intent_text = LocalLLMEngine._normalize_for_intent(query)
         has_plan_intent = bool(re.search(r"\b(ke\s*hoach|lap\s*ke\s*hoach|plan|lo\s*trinh)\b", intent_text))
         has_weight_loss_intent = bool(re.search(r"\b(giam\s*can|giam\s*mo)\b", intent_text))
         has_week_month_horizon = bool(
@@ -302,9 +170,33 @@ class LocalLLMEngine:
                 intent_text,
             )
         )
+        start_w, target_w = LocalLLMEngine._extract_weight_goal_kg(query)
+        has_explicit_weight_goal = (
+            start_w is not None and target_w is not None and start_w > target_w
+        )
 
-        # Chỉ cần là yêu cầu giảm cân theo mốc tuần/tháng là ép vào kế hoạch tuần.
-        weekly_mode = has_weight_loss_intent and has_week_month_horizon and (has_plan_intent or "cho toi" in intent_text)
+        weekly_focus = has_weight_loss_intent and (
+            has_explicit_weight_goal
+            or (has_week_month_horizon and (has_plan_intent or "cho toi" in intent_text))
+        )
+
+        return {
+            "weekly_focus": weekly_focus,
+            "start_weight": start_w,
+            "target_weight": target_w,
+            "has_explicit_weight_goal": has_explicit_weight_goal,
+        }
+
+    def generate(self, user_query: str, context: Dict[str, Any]) -> str:
+        query = (user_query or "").strip()
+        if query.lower() in {"hi", "hello", "xin chào", "chào", "hey"}:
+            return "Xin chào! Mình là EcoNutri. Bạn muốn tư vấn bữa ăn, giảm cân hay kiểm soát calo hôm nay?"
+
+        mode = self._derive_response_mode(query)
+        weekly_mode = bool(mode["weekly_focus"])
+        start_w_in_query = mode["start_weight"]
+        target_w_in_query = mode["target_weight"]
+        has_explicit_weight_goal = bool(mode["has_explicit_weight_goal"])
 
         profile = context.get("profile") or {}
         recent_history = context.get("recent_history") or []
@@ -319,6 +211,9 @@ class LocalLLMEngine:
 
         history_foods = [item.get("food_name") for item in recent_history if item.get("food_name")][:5]
         history_calories = sum(float(item.get("calories", 0) or 0) for item in recent_history)
+        weight_goal_hint = "không có"
+        if has_explicit_weight_goal:
+            weight_goal_hint = f"từ {start_w_in_query:.1f} kg xuống {target_w_in_query:.1f} kg"
 
         user_context = (
             f"Câu hỏi người dùng: {query}\n"
@@ -326,6 +221,7 @@ class LocalLLMEngine:
             f"location={profile.get('location')}, activity_level={profile.get('activity_level')}\n"
             f"Nhật ký gần đây: foods={history_foods if history_foods else 'không có'}, "
             f"total_calories_recent={round(history_calories, 1)}\n"
+            f"Mục tiêu cân nặng trong prompt: {weight_goal_hint}\n"
             f"Bữa ăn hiện tại: {current_meal}\n"
             f"Mùa/vùng: season={seasonal.get('season')}, region={seasonal.get('region_code')}\n"
             f"Rau gợi ý: {', '.join(veg) if veg else 'không có'}\n"
@@ -336,54 +232,41 @@ class LocalLLMEngine:
 
         missing_profile_fields = self._missing_profile_fields(profile)
 
-        if weekly_mode:
-            return self._strip_chinese_chars(self._build_monthly_weekly_plan(
-                query=query,
-                profile=profile,
-                seasonal=seasonal,
-                metadatas=metadatas,
-                has_internal_docs=has_internal_docs,
-                missing_fields_vi=missing_profile_fields,
-            ))
-
-        system_prompt = (
-            "Bạn là chuyên gia dinh dưỡng EcoNutri, ưu tiên khuyến nghị thực tế và có lý do rõ ràng. "
-            "Trả lời bằng tiếng Việt, dễ hiểu, tuyệt đối không tự đóng vai user. "
-            "Nếu thiếu dữ liệu, nói rõ phần nào thiếu thay vì bịa. "
-            "Không dùng ngoặc kép bao toàn bộ câu trả lời, không lặp prompt đầu vào."
-        )
+        prompt_rules = [
+            "Bạn là chuyên gia dinh dưỡng khắt khe và thực tế. Nhiệm vụ là tư vấn chế độ ăn dựa trên cơ sở khoa học.",
+            "QUY TẮC TUYỆT ĐỐI: KHÔNG BAO GIỜ tự bịa số liệu calo/protein/vitamin. Nếu thiếu dữ liệu thì nói rõ 'Tôi không có thông tin chính xác'.",
+            "QUY TẮC TUYỆT ĐỐI: TỪ CHỐI mục tiêu nguy hiểm như giảm >1kg/tuần hoặc ăn dưới 1200 kcal/ngày.",
+            "QUY TẮC TUYỆT ĐỐI: KHÔNG tự giả định tuổi, giới tính, mức vận động nếu người dùng chưa cung cấp.",
+            "Trả lời tiếng Việt, ngắn gọn, rõ ràng, không đóng vai user.",
+        ]
 
         if weekly_mode:
-            system_prompt += (
-                "\nNgười dùng đang yêu cầu kế hoạch theo tuần/tháng. "
-                "Bắt buộc xuất đúng cấu trúc sau:\n"
-                "1) Mục tiêu 1 tháng (1-2 câu)\n"
-                "2) Kế hoạch 4 tuần (tuần 1-4), mỗi tuần gồm:\n"
-                "- Mục tiêu tuần\n- Calories mục tiêu/ngày (ước lượng)\n"
-                "- Gợi ý thực đơn mẫu 1 ngày (sáng/trưa/tối + snack)\n"
-                "- Vận động gợi ý\n- Chỉ số cần theo dõi\n"
-                "3) Lý do khoa học (3 gạch đầu dòng)\n"
-                "4) Cảnh báo an toàn\n"
-                "5) Trích dẫn nội bộ (nếu có dữ liệu PDF)"
+            prompt_rules.append(
+                "Vì người dùng đang hỏi kế hoạch giảm cân theo tháng/tuần, hãy trả lời theo khung 4 tuần: "
+                "Mục tiêu tháng, Tuần 1-4, lý do khoa học ngắn, cảnh báo an toàn, và cơ sở tham khảo nội bộ nếu có."
             )
         else:
-            system_prompt += (
-                "\nBắt buộc trả lời theo đúng 5 mục sau:\n"
-                "1) Tóm tắt đánh giá (1-2 câu)\n"
-                "2) Lý do chính (3 gạch đầu dòng, nêu vì sao)\n"
-                "3) Gợi ý cụ thể cho hôm nay (2-4 gạch đầu dòng, có định lượng gần đúng nếu phù hợp)\n"
-                "4) Lưu ý rủi ro/cảnh báo (nếu có)\n"
-                "5) Cơ sở tham khảo (nêu ngắn gọn nguồn từ ngữ cảnh nếu có, nếu không thì ghi 'chưa có tài liệu nội bộ')"
+            prompt_rules.append(
+                "Ưu tiên tư vấn thực thi ngay hôm nay theo 5 ý: tóm tắt ngắn, lý do, việc nên làm, cảnh báo, cơ sở tham khảo."
             )
+
+        if has_explicit_weight_goal and start_w_in_query is not None and target_w_in_query is not None:
+            prompt_rules.append(
+                f"Nhớ nhắc rõ mục tiêu cân nặng từ {start_w_in_query:.1f} kg xuống {target_w_in_query:.1f} kg và phân bổ mốc hợp lý theo tuần."
+            )
+
+        system_prompt = "\n".join(prompt_rules)
+        composed_user_content = user_context
 
         response = self.model.create_chat_completion(
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_context},
+                {"role": "user", "content": composed_user_content},
             ],
             max_tokens=360,
-            temperature=min(max(settings.LLM_TEMPERATURE, 0.15), 0.45),
-            top_p=0.9,
+            temperature=min(max(settings.LLM_TEMPERATURE, 0.0), 0.15),
+            top_p=0.35,
+            top_k=25,
             repeat_penalty=1.1,
             stop=["\n\nUser:", "\n\nQ:", "(Hồ sơ)", "(EcoNutri)"],
         )
@@ -631,6 +514,18 @@ with tab2:
     with chat_col:
         st.subheader("Chat với chuyên gia dinh dưỡng")
 
+        ctrl_col1, ctrl_col2 = st.columns([1, 2])
+        with ctrl_col1:
+            if st.button("🧹 Hội thoại mới", use_container_width=True):
+                st.session_state.chat_history = []
+                st.rerun()
+        with ctrl_col2:
+            isolated_test_mode = st.checkbox(
+                "Chế độ test độc lập từng câu",
+                value=True,
+                help="Bật để mỗi câu hỏi được xử lý độc lập, không mang theo lịch sử chat trước đó.",
+            )
+
         # Luồng 2C: Chatbot & Context Orchestration
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
@@ -639,24 +534,28 @@ with tab2:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
 
-        # Chat UI logic...
-        if prompt := st.chat_input("Hỏi chuyên gia EcoNutri..."):
+        # Đặt input ở cuối luồng render; sau khi gửi sẽ rerun để lịch sử hiển thị phía trên input.
+        prompt = st.chat_input("Hỏi chuyên gia EcoNutri...")
+        if prompt:
+            if isolated_test_mode:
+                st.session_state.chat_history = []
+
             st.session_state.chat_history.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.write(prompt)
 
             try:
                 with st.spinner("EcoNutri đang suy nghĩ..."):
-                    response = orch.get_personalized_advice(st.session_state.user_id, prompt)
+                    response = orch.get_personalized_advice(
+                        st.session_state.user_id,
+                        prompt,
+                        recent_chat=None,
+                    )
 
                 if not response or not str(response).strip():
                     response = "Mình đã nhận câu hỏi, nhưng LLM vừa trả về rỗng. Bạn thử hỏi chi tiết hơn một chút nhé."
 
                 st.session_state.chat_history.append({"role": "assistant", "content": response})
-                with st.chat_message("assistant"):
-                    st.write(response)
             except Exception as exc:
                 error_msg = f"Không thể tạo tư vấn lúc này: {exc}"
                 st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
-                with st.chat_message("assistant"):
-                    st.error(error_msg)
+
+            st.rerun()

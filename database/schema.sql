@@ -88,6 +88,27 @@ CREATE TABLE nutrition_diary (
 
     FOREIGN KEY (user_id) REFERENCES user_profile(user_id)
 );
+
+-- Bảng mùa vụ/đặc sản theo vùng miền
+CREATE TABLE IF NOT EXISTS season (
+    season_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    food_name TEXT NOT NULL,
+    food_type TEXT NOT NULL CHECK(food_type IN ('rau', 'dac_san')),
+    region_code TEXT NOT NULL CHECK(region_code IN ('bac', 'trung', 'nam')),
+    month_start INTEGER NOT NULL CHECK(month_start BETWEEN 1 AND 12),
+    month_end INTEGER NOT NULL CHECK(month_end BETWEEN 1 AND 12),
+    note TEXT,
+    source TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(food_name, food_type, region_code, month_start, month_end)
+);
+
+CREATE INDEX IF NOT EXISTS idx_season_region_month
+ON season(region_code, month_start, month_end);
+
+CREATE INDEX IF NOT EXISTS idx_season_food_type
+ON season(food_type);
+
 INSERT INTO nutrition_reference
 (food_name, serving_size, calories, protein, carb, fat, sugar, sodium, potassium, calcium, vitamin_a, vitamin_b, vitamin_c, vitamin_d, fiber)
 VALUES

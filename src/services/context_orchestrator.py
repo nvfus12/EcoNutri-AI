@@ -2,6 +2,7 @@ from pathlib import Path
 from src.repositories.sql_repo import SQLRepository
 from src.utils.image_processor import ImageProcessor
 from src.services.user_service import UserService
+from src.services.safety_router import SafetyRouter
 
 class ContextOrchestrator:
     def __init__(self, vision_engine, sql_repo, vector_repo, llm_engine):
@@ -11,6 +12,7 @@ class ContextOrchestrator:
         self.llm_engine = llm_engine
         self.img_processor = ImageProcessor()
         self.user_service = UserService()
+        self.safety_router = SafetyRouter()
 
     def process_full_vision_flow(self, raw_image_path: str, user_id: int):
         """Luồng 2B: Tiền xử lý -> Nhận diện -> Đối chiếu DB -> Lưu Diary"""
@@ -51,10 +53,16 @@ class ContextOrchestrator:
         
         return vision_res
 
-    def get_personalized_advice(self, user_id: int, user_query: str, current_vision_res=None):
+    def get_personalized_advice(self, user_id: int, user_query: str, current_vision_res=None, recent_chat=None):
         """Luồng 2C: Gom Context (Profile + Diary + Season + RAG) -> LLM"""
         # 1. Lấy Profile & Nhật ký gần đây
         profile = self.sql_repo.get_user_profile(user_id)
+
+        # 1.1. Chặn truy vấn y khoa/không an toàn trước khi vào LLM.
+        safety_result = self.safety_router.route(user_query)
+        if safety_result.get("is_unsafe"):
+            return safety_result.get("response")
+
         history = self.sql_repo.get_recent_diary(user_id, limit=5)
         
         # 2. Lấy rau + đặc sản theo vùng và thời gian hiện tại
@@ -83,7 +91,8 @@ class ContextOrchestrator:
             "recent_history": history,
             "current_meal": current_vision_res.dict() if current_vision_res else "N/A",
             "seasonal_tips": seasonal_info,
-            "medical_knowledge": kb_context
+            "medical_knowledge": kb_context,
+            "recent_chat": (recent_chat or [])[-8:],
         }
         
         # 5. Thực thi LLM (Qwen 2.5/3.5 GGUF)
