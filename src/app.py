@@ -462,7 +462,12 @@ def bootstrap_system():
     return orchestrator, status
 
 
-orch, system_status = bootstrap_system()
+@st.cache_resource(show_spinner=False)
+def get_cached_system():
+    return bootstrap_system()
+
+
+orch, system_status = get_cached_system()
 
 # --- GIAI ĐOẠN 2: GIAO DIỆN & TƯƠNG TÁC ---
 st.markdown(
