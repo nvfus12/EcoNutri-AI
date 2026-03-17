@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     )
 
     @classmethod
-    def load_from_yaml(cls, yaml_path: str = "configs/base.yaml") -> "Settings":
+    def load_from_yaml(cls, yaml_path: str = "configs/base.yaml"):
         """
         Ghi đè cấu hình từ file YAML (nếu cần thiết cho các thông số phi nhạy cảm)
         """
