@@ -404,6 +404,14 @@ class LocalLLMEngine:
 
         return self._format_for_chat_display(self._strip_chinese_chars(text))
 
+    def generate_stream(self, user_query: str, context: Dict[str, Any]):
+        """Fallback streaming API để tương thích với orchestrator."""
+        yield self.generate(user_query, context)
+
+    def get_response_suffix(self, context: Dict[str, Any]) -> str:
+        """Giữ tương thích interface; suffix đã được ghép trong generate()."""
+        return ""
+
 # --- GIAI ĐOẠN 1: KHỞI TẠO (Initial ization) ---
 def bootstrap_system():
     # Khởi tạo toàn bộ "xương sống" dữ liệu như System Flow mô tả
@@ -647,11 +655,19 @@ with tab2:
 
             try:
                 with st.spinner("EcoNutri đang suy nghĩ..."):
-                    response = orch.get_personalized_advice(
+                    response_obj = orch.get_personalized_advice(
                         st.session_state.user_id,
                         prompt,
                         recent_chat=recent_turns,
                     )
+
+                response = ""
+                if isinstance(response_obj, tuple) and len(response_obj) == 2:
+                    answer_stream, advice_context = response_obj
+                    streamed_text = "".join(str(chunk) for chunk in answer_stream)
+                    response = streamed_text + str(orch.get_advice_suffix(advice_context) or "")
+                else:
+                    response = str(response_obj)
 
                 if not response or not str(response).strip():
                     response = "Mình đã nhận câu hỏi, nhưng LLM vừa trả về rỗng. Bạn thử hỏi chi tiết hơn một chút nhé."

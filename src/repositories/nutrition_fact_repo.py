@@ -1,99 +1,96 @@
-import json
+import logging
 import re
+import sqlite3
 import unicodedata
-from pathlib import Path
+from contextlib import contextmanager
 from typing import Any, Dict, List
 
-import pandas as pd
+from src.repositories.sql_repo import SQLRepository
 
 
 class NutritionFactRepository:
-    """Tra cứu số liệu dinh dưỡng có cấu trúc (CSV/JSON) để chống hallucination."""
+    """Tra cứu số liệu dinh dưỡng từ database 'econutri.db' thay vì file CSV/JSON rời rạc."""
 
-    def __init__(self, data_dir: str = "data/knowledges"):
-        self.data_dir = Path(data_dir)
-        self.df = self._load_sources()
+    def __init__(self):
+        # Không cần init data_dir hay csv nữa, dùng thẳng SQLRepo
+        # Mặc định SQLRepo đã trỏ tới database/econutri.db trong config của nó
+        self.sql_repo = SQLRepository()
 
     @staticmethod
     def _normalize(text: str) -> str:
         if not text:
             return ""
+        # Chuẩn hóa tiếng Việt, bỏ dấu, lower case
         text = unicodedata.normalize("NFD", str(text).lower())
         text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
         text = re.sub(r"\s+", " ", text).strip()
         return text
 
-    def _load_sources(self) -> pd.DataFrame:
-        if not self.data_dir.exists():
-            return pd.DataFrame()
-
-        frames: List[pd.DataFrame] = []
-        for file in self.data_dir.iterdir():
-            name = file.name.lower()
-            if not any(k in name for k in ["nutrition", "food", "nin", "usda", "thanh_phan", "thanh-phan"]):
-                continue
-
-            try:
-                if file.suffix.lower() == ".csv":
-                    frames.append(pd.read_csv(file))
-                elif file.suffix.lower() == ".json":
-                    with open(file, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    if isinstance(data, list):
-                        frames.append(pd.DataFrame(data))
-                    elif isinstance(data, dict) and isinstance(data.get("data"), list):
-                        frames.append(pd.DataFrame(data["data"]))
-            except Exception:
-                continue
-
-        if not frames:
-            return pd.DataFrame()
-
-        df = pd.concat(frames, ignore_index=True)
-        if "food_name" not in df.columns:
-            for alt in ["name", "food", "dish_name", "ten_mon", "ten_thuc_pham"]:
-                if alt in df.columns:
-                    df = df.rename(columns={alt: "food_name"})
-                    break
-
-        if "food_name" not in df.columns:
-            return pd.DataFrame()
-
-        # Chuẩn hóa tên cột phổ biến
-        renames = {
-            "kcal": "calories",
-            "energy": "calories",
-            "carbohydrate": "carb",
-            "carbs": "carb",
-            "lipid": "fat",
-        }
-        for old, new in renames.items():
-            if old in df.columns and new not in df.columns:
-                df = df.rename(columns={old: new})
-
-        df = df.fillna("")
-        df["food_name_norm"] = df["food_name"].astype(str).map(self._normalize)
-        return df
-
     def search_by_query(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        if self.df.empty:
-            return []
-
+        """
+        Tìm kiếm món ăn trong bảng 'nutrition_reference' của SQLite.
+        Logic: Tìm theo tên món (LIKE %query%) hoặc khớp từ khóa chính.
+        """
         qn = self._normalize(query)
-        if not qn:
+        if not qn or len(qn) < 2:
             return []
 
-        # Match theo tên món/thực phẩm có trong query
-        mask = self.df["food_name_norm"].map(lambda x: x in qn or qn in x)
-        matched = self.df[mask].head(limit)
+        results = []
+        try:
+            with self.sql_repo.get_connection() as conn:
+                # 1. Tìm ưu tiên: Tên món chứa đúng cụm từ query (độ chính xác cao nhất)
+                # Ví dụ query="pho bo" -> WHERE food_name LIKE '%pho bo%'
+                # Lưu ý: Cần đảm bảo bảng nutrition_reference trong DB đã có cột food_name chuẩn hóa hoặc tìm tương đối
+                # Ở đây giả định cột food_name lưu tiếng Việt có dấu/hoặc không dấu tùy data gốc
+                
+                # Cách tốt nhất: Tìm theo LIKE %query% (chấp nhận query không dấu tìm món có dấu khó khăn nếu DB chưa chuẩn hóa)
+                # Giải pháp nhanh: Tìm LIKE %query%
+                
+                sql_pattern = f"%{qn}%"
+                cursor = conn.execute(
+                    """
+                    SELECT food_name, calories, protein, carb, fat, fiber, source
+                    FROM nutrition_reference
+                    WHERE food_name LIKE ? OR food_name LIKE ?
+                    LIMIT ?
+                    """,
+                    (sql_pattern, sql_pattern.title(), limit) # Tìm thường và In hoa chữ cái đầu
+                )
+                
+                rows = cursor.fetchall()
+                for row in rows:
+                    results.append(dict(row))
 
-        if matched.empty:
-            # fallback theo token dài >= 4 ký tự
-            tokens = [tok for tok in qn.split() if len(tok) >= 4]
-            if not tokens:
-                return []
-            token_mask = self.df["food_name_norm"].map(lambda x: any(tok in x for tok in tokens))
-            matched = self.df[token_mask].head(limit)
+                # 2. Fallback: Nếu không thấy (hoặc ít quá), thử tìm theo từ khóa dài nhất trong query
+                if len(results) < limit:
+                    keywords = [k for k in qn.split() if len(k) >= 3]
+                    if keywords:
+                        # Lấy từ khóa dài nhất làm trọng tâm (ví dụ "pho" trong "an pho")
+                        main_keyword = max(keywords, key=len)
+                        
+                        # Tránh query lại trùng lặp nếu keyword chính là toàn bộ query
+                        if main_keyword != qn:
+                            fallback_pattern = f"%{main_keyword}%"
+                            remain_limit = limit - len(results)
+                            cursor = conn.execute(
+                                """
+                                SELECT food_name, calories, protein, carb, fat, fiber, source
+                                FROM nutrition_reference
+                                WHERE food_name LIKE ?
+                                LIMIT ?
+                                """,
+                                (fallback_pattern, remain_limit)
+                            )
+                            fallback_rows = cursor.fetchall()
+                            
+                            # Deduplicate (tránh trùng món đã có ở bước 1)
+                            existing_names = {r["food_name"] for r in results}
+                            for row in fallback_rows:
+                                if row["food_name"] not in existing_names:
+                                    results.append(dict(row))
 
-        cols = [c for c in ["food_name", "calories", "protein", "carb", "fat", "fiber", "source"] if c in matched.columns]
-        return matched[cols].to_dict(orient="records")
+        except Exception as e:
+            logging.error(f"Lỗi tìm kiếm dinh dưỡng trong DB (NutritionFactRepo): {e}")
+            return []
+
+        return results

@@ -125,8 +125,15 @@ class ContextOrchestrator:
         # 5. Thực thi LLM (Qwen 2.5/3.5 GGUF)
         if self.llm_engine is not None:
             # Trả về stream và context để UI xử lý hậu kỳ (gắn suffix)
-            answer_stream = self.llm_engine.generate_stream(user_query, context)
-            return (answer_stream, context)
+            if hasattr(self.llm_engine, "generate_stream"):
+                answer_stream = self.llm_engine.generate_stream(user_query, context)
+                return (answer_stream, context)
+
+            if hasattr(self.llm_engine, "generate"):
+                def _compat_stream():
+                    yield self.llm_engine.generate(user_query, context)
+
+                return (_compat_stream(), context)
 
         # Fallback nếu LLM engine không có sẵn
         def fallback_stream():
