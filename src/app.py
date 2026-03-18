@@ -548,8 +548,8 @@ with tab2:
                 with st.chat_message("user"):
                     st.markdown(prompt)
 
-                # Số lượng tin nhắn lịch sử được truyền vào LLM (VD: 10 tin = 5 lượt Q&A)
-                recent_turns = current_chat_history[-10:]
+                # Giảm số lượng tin nhắn lịch sử (VD: 6 tin = 3 lượt Q&A) để giảm tải cho CPU Cloud
+                recent_turns = current_chat_history[-6:]
 
                 with st.chat_message("assistant"):
                     try:

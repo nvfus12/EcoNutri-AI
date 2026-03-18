@@ -302,7 +302,7 @@ class CloudLLMEngine(LocalLLMEngine):
 
         try:
             # Gửi request lên API Cloud
-            response = requests.post(f"{self.api_url}/v1/completions", json=payload, stream=True, timeout=30)
+            response = requests.post(f"{self.api_url}/v1/completions", json=payload, stream=True, timeout=300)
             response.raise_for_status()
             
             for line in response.iter_lines():
