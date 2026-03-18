@@ -2,14 +2,15 @@ version: '3.8'
 
 services:
   econutri-api:
-    build: .
+    image: ghcr.io/abetlen/llama-cpp-python:latest
     container_name: econutri_api_container
-    command: ["uvicorn", "src.cloud_api:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "8000:8000"
     volumes:
-      # Cloud API chỉ cần file models AI (weights)
-      - ./weights:/app/weights
+      - ./weights:/app/models
     restart: unless-stopped
     environment:
-      - PYTHONUNBUFFERED=1
+      - MODEL=/app/models/qwen2.5-3b-instruct-q4_k_m.gguf
+      - HOST=0.0.0.0
+      - PORT=8000
+      - N_CTX=4096

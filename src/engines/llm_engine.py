@@ -296,7 +296,8 @@ class CloudLLMEngine(LocalLLMEngine):
             "prompt": raw_prompt,
             "max_tokens": 2048,
             "temperature": min(max(settings.LLM_TEMPERATURE, 0.15), 0.45),
-            "stream": True
+            "stream": True,
+            "stop": ["\n\nUser:", "\n\nQ:", "(Hồ sơ)", "(EcoNutri)", "<|im_end|>"]
         }
 
         try:
