@@ -221,3 +221,11 @@ __marimo__/
 *.pickle
 
 *.joblib
+
+*.jpeg
+*.jpg
+*.png
+*.gif
+*.tiff
+*.bmp
+*.ico
