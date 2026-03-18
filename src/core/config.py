@@ -30,11 +30,6 @@ class Settings(BaseSettings):
     LLM_CONTEXT_WINDOW: int = 4096
     LLM_TEMPERATURE: float = 0.6 # Tăng lên 0.6 để diễn đạt tiếng Việt mượt mà, tự nhiên và đủ dấu
     
-    # --- CẤU HÌNH CLOUD API (HYBRID ARCHITECTURE) ---
-    USE_CLOUD_MODELS: bool = True
-    CLOUD_API_URL: str = Field(default="http://127.0.0.1:8000", env="CLOUD_API_URL")
-    CLOUD_VISION_API_URL: str = Field(default="http://127.0.0.1:8001", env="CLOUD_VISION_API_URL")
-    
     # --- CẤU HÌNH DATABASE & RAG ---
     CHUNK_SIZE: int = 500
     CHUNK_OVERLAP: int = 50

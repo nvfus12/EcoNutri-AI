@@ -103,14 +103,9 @@ def bootstrap_system():
 
     vision_engine = None
     try:
-        if getattr(settings, "USE_CLOUD_MODELS", False):
-            from src.engines.cloud_vision import CloudVisionEngine
-            vision_engine = CloudVisionEngine(api_url=settings.CLOUD_VISION_API_URL)
-            status["vision"] = "cloud (api)"
-        else:
-            from src.engines.vision_engine import VisionEngine
-            vision_engine = VisionEngine()
-            status["vision"] = "on (local)"
+        from src.engines.vision_engine import VisionEngine
+        vision_engine = VisionEngine()
+        status["vision"] = "on (local)"
     except Exception as exc:
         status["notes"].append(f"Vision chưa sẵn sàng: {exc}")
 
@@ -130,11 +125,7 @@ def bootstrap_system():
 
     llm_engine = None
     try:
-        if getattr(settings, "USE_CLOUD_MODELS", False):
-            from src.engines.llm_engine import CloudLLMEngine
-            llm_engine = CloudLLMEngine(api_url=settings.CLOUD_API_URL)
-            status["llm"] = "cloud"
-        elif settings.LLM_MODEL_PATH.exists():
+        if settings.LLM_MODEL_PATH.exists():
             from src.engines.llm_engine import LocalLLMEngine
             llm_engine = LocalLLMEngine(
                 model_path=settings.LLM_MODEL_PATH,
@@ -548,8 +539,8 @@ with tab2:
                 with st.chat_message("user"):
                     st.markdown(prompt)
 
-                # Cắt giảm lịch sử xuống còn 4 tin (2 lượt Q&A) để AI đọc nhanh nhất có thể
-                recent_turns = current_chat_history[-4:]
+                # Cắt giảm lịch sử xuống còn 3 tin (1 lượt Q&A cũ + 1 câu hỏi mới)
+                recent_turns = current_chat_history[-3:]
 
                 with st.chat_message("assistant"):
                     try:
@@ -573,7 +564,7 @@ with tab2:
                             last_update = time.time()
                             for chunk in answer_stream:
                                 buffer.append(str(chunk))
-                                # Cập nhật UI mỗi 0.05 giây hoặc khi buffer có 5 chunks để giảm tải render
+                                # Cập nhật UI mỗi 0.05 giây hoặc khi buffer có 5 chunks
                                 if time.time() - last_update > 0.05 or len(buffer) > 5:
                                     streamed_text += "".join(buffer)
                                     buffer.clear()

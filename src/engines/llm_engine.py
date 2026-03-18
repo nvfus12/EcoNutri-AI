@@ -5,8 +5,6 @@ import unicodedata
 import time
 from pathlib import Path
 from typing import Any, Dict
-import requests
-import json
 import yaml
 
 from src.core.config import settings
@@ -20,7 +18,7 @@ class LocalLLMEngine:
         self.model = llama_cls(
             model_path=str(model_path), 
             n_ctx=n_ctx, 
-            n_threads=max(1, os.cpu_count() - 1),  # Dùng tối đa CPU trừ 1 luồng cho HĐH
+            n_threads=os.cpu_count(),  # Dùng tối đa CPU
             n_gpu_layers=-1,  # Đẩy toàn bộ layers lên GPU nếu có. Đặt = 0 nếu chỉ muốn dùng CPU.
             verbose=False
         )
@@ -228,106 +226,3 @@ class LocalLLMEngine:
             )
         
         return "\n\n".join(filter(None, suffix_parts))
-
-
-class CloudLLMEngine(LocalLLMEngine):
-    """Kế thừa LocalLLMEngine nhưng gọi LLM thông qua API Server trên Cloud thay vì chạy Local."""
-
-    def __init__(self, api_url: str):
-        self.api_url = api_url
-        self.prompts = self._load_prompts()
-        # Không khởi tạo self.model để tiết kiệm RAM
-
-    def generate_stream(self, user_query: str, context: Dict[str, Any]):
-        """Gắn Context vào Prompt, gửi lên Cloud API và nhận stream SSE (Server-Sent Events)."""
-        query = (user_query or "").strip()
-        intent_text = self._normalize_for_intent(query)
-
-        has_plan_intent = bool(re.search(r"\b(ke\s*hoach|lap\s*ke\s*hoach|plan|lo\s*trinh)\b", intent_text))
-        has_weight_loss_intent = bool(re.search(r"\b(giam\s*can|giam\s*mo)\b", intent_text))
-        has_week_month_horizon = bool(re.search(r"\b(tuan|theo\s*tuan|tung\s*tuan|4\s*tuan|thang|1\s*thang|mot\s*thang|month|week)\b", intent_text))
-        weekly_mode = has_weight_loss_intent and has_week_month_horizon and (has_plan_intent or "cho toi" in intent_text)
-
-        profile = context.get("profile") or {}
-        recent_history = context.get("recent_history") or []
-        current_time = context.get("current_time") or "Không rõ"
-        current_weather = context.get("current_weather") or "Không rõ"
-        current_meal = context.get("current_meal") or "N/A"
-        seasonal = context.get("seasonal_tips") or {}
-        veg = [x.get("food_name") for x in seasonal.get("vegetables", []) if x.get("food_name")][:3]
-        specs = [x.get("food_name") for x in seasonal.get("specialties", []) if x.get("food_name")][:3]
-        kb_data = context.get("medical_knowledge") or {}
-        docs = kb_data.get("documents", [])[:2]
-        metadatas = kb_data.get("metadatas", [])[:2]
-
-        history_foods = [item.get("food_name") for item in recent_history if item.get("food_name")][:5]
-        history_calories = sum(float(item.get("calories", 0) or 0) for item in recent_history)
-
-        # TỐI ƯU HÓA CHO CLOUD API
-        context_parts = [f"Câu hỏi người dùng: {query}"]
-        if profile.get('age'):
-            context_parts.append(f"Hồ sơ: age={profile.get('age')}, gender={profile.get('gender')}, goal={profile.get('goal')}, activity={profile.get('activity_level')}")
-        if history_foods:
-            context_parts.append(f"Nhật ký gần đây: {history_foods} (Calo: {round(history_calories, 1)})")
-        if current_meal != "N/A":
-            context_parts.append(f"Bữa ăn: {current_meal}")
-        if veg or specs:
-            context_parts.append(f"Mùa/vùng: {seasonal.get('season')}, {seasonal.get('region_code')}")
-            if veg: context_parts.append(f"Rau gợi ý: {', '.join(veg)}")
-            if specs: context_parts.append(f"Đặc sản: {', '.join(specs)}")
-        if docs:
-            context_parts.append(f"Tài liệu y khoa (RAG): {docs}")
-            
-        user_context = "\n".join(context_parts)
-
-        system_prompt = self.prompts.get("base_system_prompt", "")
-        if weekly_mode:
-            system_prompt += "\n" + self.prompts.get("weekly_plan_prompt", "")
-        else:
-            system_prompt += "\n" + self.prompts.get("daily_advice_prompt", "")
-
-        raw_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
-        
-        recent_chat = context.get("recent_chat") or []
-        if len(recent_chat) > 1:
-            for msg in recent_chat[:-1]:
-                role = msg.get("role", "user")
-                content = msg.get("content", "")
-                raw_prompt += f"<|im_start|>{role}\n{content}<|im_end|>\n"
-                
-        raw_prompt += f"<|im_start|>user\n{user_context}<|im_end|>\n<|im_start|>assistant\n"
-
-        payload = {
-            "prompt": raw_prompt,
-            "max_tokens": 800,
-            "temperature": settings.LLM_TEMPERATURE,
-            "top_p": 0.85,
-            "frequency_penalty": 0.1,
-            "stream": True,
-            "stop": ["\n\nUser:", "\n\nQ:", "(Hồ sơ)", "(EcoNutri)", "<|im_end|>"]
-        }
-
-        try:
-            # Gửi request lên API Cloud
-            response = requests.post(f"{self.api_url}/v1/completions", json=payload, stream=True, timeout=300)
-            response.raise_for_status()
-            
-            for line in response.iter_lines():
-                if line:
-                    decoded_line = line.decode('utf-8')
-                    if decoded_line.startswith("data: "):
-                        data_str = decoded_line[6:]
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(data_str)
-                            content = chunk.get("choices", [{}])[0].get("text", "")
-                            if content:
-                                cleaned_token = content.replace('"', '').replace('“', '').replace('”', '')
-                                if "(Hồ sơ)" in cleaned_token or "(EcoNutri)" in cleaned_token:
-                                    continue
-                                yield self._strip_chinese_chars(cleaned_token, is_stream_token=True)
-                        except json.JSONDecodeError:
-                            continue
-        except Exception as e:
-            yield f"\n[Lỗi kết nối tới Cloud: {str(e)}]"

@@ -8,7 +8,7 @@
       },
       {
         "role": "assistant",
-        "content": "\n[Lỗi kết nối tới Cloud: HTTPConnectionPool(host='34.143.156.53', port=8000): Read timed out. (read timeout=300)]"
+        "content": "Tóm tắt ngắn gọn vấn đề: Bạn đang thắc mắc về thực phẩm nên ăn hôm nay để duy trì sức khỏe, với độ tuổi 19, giới tính nam và hoạt động thể chất thường xuyên.\n\nGợi ý cụ thể cho hôm nay: Bạn có thể tham khảo các món ăn như Bún chả Hà Nội hoặc Cá cơ vong nếu thích đặc sản. Ngoài ra, hãy bổ sung các loại rau như Bắp cải, Rau ngót và Su hào vào thực đơn của mình. Tối nay, thay vì ăn bánh chưng và phở nhiều như trong nhật ký gần đây, bạn nên chọn một bữa ăn nhẹ hơn, như salad rau luộc hoặc cá hấp. \n\nLưu ý/Cảnh báo: Thực đơn bạn đã đăng ký gần đây có tổng calo là 2600 kcal, nên cần điều chỉnh lượng calo để phù hợp với mục tiêu duy trì cân nặng."
       }
     ]
   }
