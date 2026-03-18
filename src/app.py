@@ -104,9 +104,9 @@ def bootstrap_system():
     vision_engine = None
     try:
         if getattr(settings, "USE_CLOUD_MODELS", False):
-            # TODO: from src.engines.vision_engine import CloudVisionEngine
-            # vision_engine = CloudVisionEngine(api_url=settings.CLOUD_API_URL)
-            status["vision"] = "cloud"
+            from src.engines.cloud_vision import CloudVisionEngine
+            vision_engine = CloudVisionEngine(api_url=settings.CLOUD_VISION_API_URL)
+            status["vision"] = "cloud (api)"
         else:
             from src.engines.vision_engine import VisionEngine
             vision_engine = VisionEngine()
@@ -116,20 +116,15 @@ def bootstrap_system():
 
     vector_repo = None
     try:
-        if getattr(settings, "USE_CLOUD_MODELS", False):
-            # TODO: from src.repositories.vector_repo import CloudVectorRepository
-            # vector_repo = CloudVectorRepository(api_url=settings.CLOUD_API_URL)
-            status["vector"] = "cloud"
-            status["vector_docs"] = -1
-        else:
-            from src.repositories.vector_repo import VectorRepository
-            vector_repo = VectorRepository()
-            status["vector"] = "on (local)"
-            status["vector_docs"] = int(vector_repo.count_documents())
-            if status["vector_docs"] == 0:
-                status["notes"].append(
-                    "Vector đã bật nhưng chưa có tài liệu nội bộ. Hãy chạy scripts/ingest_knowledge.py để nạp PDF."
-                )
+        # Bắt buộc RAG / VectorDB chạy cục bộ (local) để giữ kiến trúc bảo mật
+        from src.repositories.vector_repo import VectorRepository
+        vector_repo = VectorRepository()
+        status["vector"] = "on (local)"
+        status["vector_docs"] = int(vector_repo.count_documents())
+        if status["vector_docs"] == 0:
+            status["notes"].append(
+                "Vector đã bật nhưng chưa có tài liệu nội bộ. Hãy chạy scripts/ingest_knowledge.py để nạp PDF."
+            )
     except Exception as exc:
         status["notes"].append(f"Vector chưa sẵn sàng: {exc}")
 

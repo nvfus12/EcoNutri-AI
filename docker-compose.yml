@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  econutri-api:
+  llm-api:
     image: ghcr.io/abetlen/llama-cpp-python:latest
-    container_name: econutri_api_container
+    container_name: llm_api_container
     ports:
       - "8000:8000"
     volumes:
@@ -14,3 +14,16 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - N_CTX=4096
+
+  vision-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.vision
+    container_name: vision_api_container
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./weights:/app/weights
+      - ./src:/app/src
+      - ./configs:/app/configs
+    restart: unless-stopped

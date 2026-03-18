@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # --- CẤU HÌNH CLOUD API (HYBRID ARCHITECTURE) ---
     USE_CLOUD_MODELS: bool = True
     CLOUD_API_URL: str = Field(default="http://127.0.0.1:8000", env="CLOUD_API_URL")
+    CLOUD_VISION_API_URL: str = Field(default="http://127.0.0.1:8001", env="CLOUD_VISION_API_URL")
     
     # --- CẤU HÌNH DATABASE & RAG ---
     CHUNK_SIZE: int = 500
