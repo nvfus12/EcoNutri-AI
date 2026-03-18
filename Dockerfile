@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y \
     g++ \
     libgl1 \
     libglib2.0-0 \
+    python3-dev \
+    python3-distutils \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -14,8 +17,10 @@ WORKDIR /app
 # Copy file requirements và cài đặt
 COPY requirements.txt .
 
-# Cập nhật công cụ build và setuptools (cung cấp distutils) trước khi cài đặt
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir --upgrade pip wheel "setuptools<70.0.0"
+
+# Ép các thư viện khi build phải dùng distutils của hệ thống
+ENV SETUPTOOLS_USE_DISTUTILS=stdlib
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy toàn bộ mã nguồn vào container
