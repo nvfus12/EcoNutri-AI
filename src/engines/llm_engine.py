@@ -5,6 +5,8 @@ import unicodedata
 import time
 from pathlib import Path
 from typing import Any, Dict
+import requests
+import json
 import yaml
 
 from src.core.config import settings
@@ -163,8 +165,19 @@ class LocalLLMEngine:
         else:
             system_prompt += "\n" + self.prompts.get("daily_advice_prompt", "")
 
-        # Lắp ráp thủ công chuỗi Prompt theo chuẩn ChatML để vượt rào lỗi sampler
-        raw_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_context}<|im_end|>\n<|im_start|>assistant\n"
+        # Lắp ráp thủ công chuỗi Prompt theo chuẩn ChatML
+        raw_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
+        
+        # Chèn lịch sử chat trước đó (nếu có) vào prompt
+        recent_chat = context.get("recent_chat") or []
+        if len(recent_chat) > 1:
+            for msg in recent_chat[:-1]:  # Bỏ qua câu hỏi hiện tại ở cuối cùng của list
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                raw_prompt += f"<|im_start|>{role}\n{content}<|im_end|>\n"
+                
+        # Thêm câu hỏi hiện tại (đã kèm ngữ cảnh thông tin hồ sơ/RAG) ở cuối cùng
+        raw_prompt += f"<|im_start|>user\n{user_context}<|im_end|>\n<|im_start|>assistant\n"
 
         response = self.model(
             prompt=raw_prompt,
@@ -212,3 +225,101 @@ class LocalLLMEngine:
             )
         
         return "\n\n".join(filter(None, suffix_parts))
+
+
+class CloudLLMEngine(LocalLLMEngine):
+    """Kế thừa LocalLLMEngine nhưng gọi LLM thông qua API Server trên Cloud thay vì chạy Local."""
+
+    def __init__(self, api_url: str):
+        self.api_url = api_url
+        self.prompts = self._load_prompts()
+        # Không khởi tạo self.model để tiết kiệm RAM
+
+    def generate_stream(self, user_query: str, context: Dict[str, Any]):
+        """Gắn Context vào Prompt, gửi lên Cloud API và nhận stream SSE (Server-Sent Events)."""
+        query = (user_query or "").strip()
+        intent_text = self._normalize_for_intent(query)
+
+        has_plan_intent = bool(re.search(r"\b(ke\s*hoach|lap\s*ke\s*hoach|plan|lo\s*trinh)\b", intent_text))
+        has_weight_loss_intent = bool(re.search(r"\b(giam\s*can|giam\s*mo)\b", intent_text))
+        has_week_month_horizon = bool(re.search(r"\b(tuan|theo\s*tuan|tung\s*tuan|4\s*tuan|thang|1\s*thang|mot\s*thang|month|week)\b", intent_text))
+        weekly_mode = has_weight_loss_intent and has_week_month_horizon and (has_plan_intent or "cho toi" in intent_text)
+
+        profile = context.get("profile") or {}
+        recent_history = context.get("recent_history") or []
+        current_time = context.get("current_time") or "Không rõ"
+        current_weather = context.get("current_weather") or "Không rõ"
+        current_meal = context.get("current_meal") or "N/A"
+        seasonal = context.get("seasonal_tips") or {}
+        veg = [x.get("food_name") for x in seasonal.get("vegetables", []) if x.get("food_name")][:3]
+        specs = [x.get("food_name") for x in seasonal.get("specialties", []) if x.get("food_name")][:3]
+        kb_data = context.get("medical_knowledge") or {}
+        docs = kb_data.get("documents", [])[:2]
+        metadatas = kb_data.get("metadatas", [])[:2]
+
+        history_foods = [item.get("food_name") for item in recent_history if item.get("food_name")][:5]
+        history_calories = sum(float(item.get("calories", 0) or 0) for item in recent_history)
+
+        user_context = (
+            f"Câu hỏi người dùng: {query}\n"
+            f"Thời gian hiện tại: {current_time} | Thời tiết: {current_weather}\n"
+            f"Hồ sơ: age={profile.get('age')}, gender={profile.get('gender')}, goal={profile.get('goal')}, "
+            f"activity_level={profile.get('activity_level')}\n"
+            f"Nhật ký gần đây: foods={history_foods if history_foods else 'không có'}, "
+            f"total_calories_recent={round(history_calories, 1)}\n"
+            f"Bữa ăn hiện tại: {current_meal}\n"
+            f"Mùa/vùng: season={seasonal.get('season')}, region={seasonal.get('region_code')}\n"
+            f"Rau gợi ý: {', '.join(veg) if veg else 'không có'}\n"
+            f"Đặc sản gợi ý: {', '.join(specs) if specs else 'không có'}\n"
+            f"Trích đoạn tài liệu: {docs if docs else 'không có'}\n"
+            f"Metadata nguồn: {metadatas if metadatas else 'không có'}"
+        )
+
+        system_prompt = self.prompts.get("base_system_prompt", "")
+        if weekly_mode:
+            system_prompt += "\n" + self.prompts.get("weekly_plan_prompt", "")
+        else:
+            system_prompt += "\n" + self.prompts.get("daily_advice_prompt", "")
+
+        raw_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
+        
+        recent_chat = context.get("recent_chat") or []
+        if len(recent_chat) > 1:
+            for msg in recent_chat[:-1]:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                raw_prompt += f"<|im_start|>{role}\n{content}<|im_end|>\n"
+                
+        raw_prompt += f"<|im_start|>user\n{user_context}<|im_end|>\n<|im_start|>assistant\n"
+
+        payload = {
+            "prompt": raw_prompt,
+            "max_tokens": 2048,
+            "temperature": min(max(settings.LLM_TEMPERATURE, 0.15), 0.45),
+            "stream": True
+        }
+
+        try:
+            # Gửi request lên API Cloud
+            response = requests.post(f"{self.api_url}/v1/completions", json=payload, stream=True, timeout=30)
+            response.raise_for_status()
+            
+            for line in response.iter_lines():
+                if line:
+                    decoded_line = line.decode('utf-8')
+                    if decoded_line.startswith("data: "):
+                        data_str = decoded_line[6:]
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            content = chunk.get("choices", [{}])[0].get("text", "")
+                            if content:
+                                cleaned_token = content.replace('"', '').replace('“', '').replace('”', '')
+                                if "(Hồ sơ)" in cleaned_token or "(EcoNutri)" in cleaned_token:
+                                    continue
+                                yield self._strip_chinese_chars(cleaned_token, is_stream_token=True)
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as e:
+            yield f"\n[Lỗi kết nối tới Cloud: {str(e)}]"

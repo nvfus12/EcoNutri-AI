@@ -103,34 +103,49 @@ def bootstrap_system():
 
     vision_engine = None
     try:
-        from src.engines.vision_engine import VisionEngine
-        vision_engine = VisionEngine()
-        status["vision"] = "on"
+        if getattr(settings, "USE_CLOUD_MODELS", False):
+            # TODO: from src.engines.vision_engine import CloudVisionEngine
+            # vision_engine = CloudVisionEngine(api_url=settings.CLOUD_API_URL)
+            status["vision"] = "cloud"
+        else:
+            from src.engines.vision_engine import VisionEngine
+            vision_engine = VisionEngine()
+            status["vision"] = "on (local)"
     except Exception as exc:
         status["notes"].append(f"Vision chưa sẵn sàng: {exc}")
 
     vector_repo = None
     try:
-        from src.repositories.vector_repo import VectorRepository
-        vector_repo = VectorRepository()
-        status["vector"] = "on"
-        status["vector_docs"] = int(vector_repo.count_documents())
-        if status["vector_docs"] == 0:
-            status["notes"].append(
-                "Vector đã bật nhưng chưa có tài liệu nội bộ. Hãy chạy scripts/ingest_knowledge.py để nạp PDF."
-            )
+        if getattr(settings, "USE_CLOUD_MODELS", False):
+            # TODO: from src.repositories.vector_repo import CloudVectorRepository
+            # vector_repo = CloudVectorRepository(api_url=settings.CLOUD_API_URL)
+            status["vector"] = "cloud"
+            status["vector_docs"] = -1
+        else:
+            from src.repositories.vector_repo import VectorRepository
+            vector_repo = VectorRepository()
+            status["vector"] = "on (local)"
+            status["vector_docs"] = int(vector_repo.count_documents())
+            if status["vector_docs"] == 0:
+                status["notes"].append(
+                    "Vector đã bật nhưng chưa có tài liệu nội bộ. Hãy chạy scripts/ingest_knowledge.py để nạp PDF."
+                )
     except Exception as exc:
         status["notes"].append(f"Vector chưa sẵn sàng: {exc}")
 
     llm_engine = None
     try:
-        if settings.LLM_MODEL_PATH.exists():
+        if getattr(settings, "USE_CLOUD_MODELS", False):
+            from src.engines.llm_engine import CloudLLMEngine
+            llm_engine = CloudLLMEngine(api_url=settings.CLOUD_API_URL)
+            status["llm"] = "cloud"
+        elif settings.LLM_MODEL_PATH.exists():
             from src.engines.llm_engine import LocalLLMEngine
             llm_engine = LocalLLMEngine(
                 model_path=settings.LLM_MODEL_PATH,
                 n_ctx=settings.LLM_CONTEXT_WINDOW,
             )
-            status["llm"] = "on"
+            status["llm"] = "on (local)"
         else:
             status["notes"].append(f"Không tìm thấy model LLM: {settings.LLM_MODEL_PATH}")
     except Exception as exc:
@@ -502,7 +517,7 @@ with tab2:
         with ctrl_col2:
             isolated_test_mode = st.checkbox(
                 "Chế độ test độc lập từng câu",
-                value=True,
+                value=False,
                 help="Bật để mỗi câu hỏi được xử lý độc lập, không mang theo lịch sử chat trước đó.",
             )
 
@@ -538,7 +553,8 @@ with tab2:
                 with st.chat_message("user"):
                     st.markdown(prompt)
 
-                recent_turns = current_chat_history[-4:]
+                # Số lượng tin nhắn lịch sử được truyền vào LLM (VD: 10 tin = 5 lượt Q&A)
+                recent_turns = current_chat_history[-10:]
 
                 with st.chat_message("assistant"):
                     try:

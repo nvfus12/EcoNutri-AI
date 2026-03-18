@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env
+
+# Bỏ qua các thư mục dữ liệu và model để mount qua volume sau
+# Điều này giúp dữ liệu không bị mất khi bạn khởi động lại container
+weights/
+database/
+data/
+
+.git/
