@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # Local LLM (Qwen via llama-cpp-python)
     LLM_MODEL_PATH: Path = ROOT_DIR / "weights" / "qwen2.5-3b-instruct-q4_k_m.gguf"
     LLM_CONTEXT_WINDOW: int = 4096
-    LLM_TEMPERATURE: float = 0.2 # Thấp để đảm bảo câu trả lời chính xác, ít "sáng tạo" quá đà
+    LLM_TEMPERATURE: float = 0.6 # Tăng lên 0.6 để diễn đạt tiếng Việt mượt mà, tự nhiên và đủ dấu
     
     # --- CẤU HÌNH CLOUD API (HYBRID ARCHITECTURE) ---
     USE_CLOUD_MODELS: bool = True

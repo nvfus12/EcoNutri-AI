@@ -1,54 +1,14 @@
 {
   "1773812674086": {
-    "title": "tôi nên ăn gì vào bu...",
+    "title": "tôi nên ăn gì hôm na...",
     "messages": [
       {
         "role": "user",
-        "content": "tôi nên ăn gì vào buổi sáng"
+        "content": "tôi nên ăn gì hôm nay"
       },
       {
         "role": "assistant",
-        "content": "Tóm tắt ngắn gọn vấn đề: Bạn đang lo lắng về bữa sáng phù hợp cho buổi sáng, đặc biệt khi thời tiết đang mát mẻ và bạn đang cố gắng duy trì cân nặng với mức độ hoạt động cao.\n\nGợi ý cụ thể cho hôm nay: Tôi khuyên bạn nên ăn một bữa sáng nhẹ với khoảng 300-400 kcal. Bạn có thể thử một bữa sáng như sau:\n- 1 ổ bánh mì nguyên hạt\n- 1 quả trứng luộc\n- 100g bắp cải xào nhẹ\n- 100g su hào xào\n\nLưu ý/Cảnh báo: Món ăn này sẽ giúp bạn duy trì cân nặng và cung cấp đủ chất dinh dưỡng cho ngày hoạt động của bạn. Tuy nhiên, nếu bạn cảm thấy đói sau bữa sáng, bạn có thể cân nhắc thêm một chút rau hoặc một ít protein khác như trứng luộc hoặc cá nhỏ."
-      },
-      {
-        "role": "user",
-        "content": "cho tôi 1 ổ bánh mì"
-      },
-      {
-        "role": "assistant",
-        "content": "\n[Lỗi kết nối tới Cloud: HTTPConnectionPool(host='%3cip_cloud_cua_ban%3e', port=8000): Max retries exceeded with url: /v1/completions (Caused by NameResolutionError(\"<urllib3.connection.HTTPConnection object at 0x000001A839A379D0>: Failed to resolve '%3cip_cloud_cua_ban%3e' ([Errno 11001] getaddrinfo failed)\"))]"
-      },
-      {
-        "role": "user",
-        "content": "cho tôi 1 ổ bánh mì"
-      },
-      {
-        "role": "assistant",
-        "content": "Tóm tắt ngắn gọn vấn đề: Bạn đang tìm kiếm một gợi ý cho bữa sáng phù hợp với mục tiêu duy trì cân nặng và mức độ hoạt động cao, trong khi thời tiết đang mát mẻ.\n\nGợi ý cụ thể cho hôm nay: Bạn có thể thử một ổ bánh mì nguyên hạt nhỏ (khoảng 100g) kèm với một quả trứng luộc và một ít rau như bắp cải xào. Đây là một bữa sáng nhẹ với khoảng 300-400 kcal, phù hợp với mục tiêu của bạn.\n\nLưu ý/Cảnh báo: Bánh mì nguyên hạt sẽ cung cấp năng lượng và chất béo lành mạnh, trứng luộc sẽ cung cấp protein, và bắp cải xào sẽ cung cấp vitamin và khoáng chất. Tuy nhiên, nếu bạn cảm thấy đói sau bữa sáng, bạn có thể cân nhắc thêm một ít rau hoặc một ít protein khác như trứng luộc hoặc cá nhỏ."
-      },
-      {
-        "role": "user",
-        "content": "hôm nay tôi nên ăn gì"
-      },
-      {
-        "role": "assistant",
-        "content": "\n[Lỗi kết nối tới Cloud: HTTPConnectionPool(host='%3c34.143.156.53%3e', port=8000): Max retries exceeded with url: /v1/completions (Caused by NameResolutionError(\"<urllib3.connection.HTTPConnection object at 0x00000242D6A53250>: Failed to resolve '%3c34.143.156.53%3e' ([Errno 11001] getaddrinfo failed)\"))]"
-      },
-      {
-        "role": "user",
-        "content": "hôm nay tôi nên ăn gì"
-      },
-      {
-        "role": "assistant",
-        "content": "\n[Lỗi kết nối tới Cloud: HTTPConnectionPool(host='34.143.156.53', port=8000): Read timed out. (read timeout=30)]"
-      },
-      {
-        "role": "user",
-        "content": "hôm nay tôi nên ăn gì"
-      },
-      {
-        "role": "assistant",
-        "content": "\n[Lỗi kết nối tới Cloud: HTTPConnectionPool(host='34.143.156.53', port=8000): Read timed out. (read timeout=120)]"
+        "content": "\n[Lỗi kết nối tới Cloud: HTTPConnectionPool(host='34.143.156.53', port=8000): Read timed out. (read timeout=300)]"
       }
     ]
   }

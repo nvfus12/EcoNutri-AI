@@ -141,20 +141,22 @@ class LocalLLMEngine:
         history_foods = [item.get("food_name") for item in recent_history if item.get("food_name")][:5]
         history_calories = sum(float(item.get("calories", 0) or 0) for item in recent_history)
 
-        user_context = (
-            f"Câu hỏi người dùng: {query}\n"
-            f"Thời gian hiện tại: {current_time} | Thời tiết: {current_weather}\n"
-            f"Hồ sơ: age={profile.get('age')}, gender={profile.get('gender')}, goal={profile.get('goal')}, "
-            f"activity_level={profile.get('activity_level')}\n"
-            f"Nhật ký gần đây: foods={history_foods if history_foods else 'không có'}, "
-            f"total_calories_recent={round(history_calories, 1)}\n"
-            f"Bữa ăn hiện tại: {current_meal}\n"
-            f"Mùa/vùng: season={seasonal.get('season')}, region={seasonal.get('region_code')}\n"
-            f"Rau gợi ý: {', '.join(veg) if veg else 'không có'}\n"
-            f"Đặc sản gợi ý: {', '.join(specs) if specs else 'không có'}\n"
-            f"Trích đoạn tài liệu: {docs if docs else 'không có'}\n"
-            f"Metadata nguồn: {metadatas if metadatas else 'không có'}"
-        )
+        # TỐI ƯU HÓA: Chỉ chèn các context có dữ liệu thật để giảm tải thời gian đọc của CPU Cloud
+        context_parts = [f"Câu hỏi người dùng: {query}"]
+        if profile.get('age'):
+            context_parts.append(f"Hồ sơ: age={profile.get('age')}, gender={profile.get('gender')}, goal={profile.get('goal')}, activity={profile.get('activity_level')}")
+        if history_foods:
+            context_parts.append(f"Nhật ký gần đây: {history_foods} (Calo: {round(history_calories, 1)})")
+        if current_meal != "N/A":
+            context_parts.append(f"Bữa ăn: {current_meal}")
+        if veg or specs:
+            context_parts.append(f"Mùa/vùng: {seasonal.get('season')}, {seasonal.get('region_code')}")
+            if veg: context_parts.append(f"Rau gợi ý: {', '.join(veg)}")
+            if specs: context_parts.append(f"Đặc sản: {', '.join(specs)}")
+        if docs:
+            context_parts.append(f"Tài liệu y khoa (RAG): {docs}")
+            
+        user_context = "\n".join(context_parts)
 
         missing_profile_fields = self._missing_profile_fields(profile)
 
@@ -182,9 +184,10 @@ class LocalLLMEngine:
         response = self.model(
             prompt=raw_prompt,
             stream=True,  # Bật chế độ streaming
-            max_tokens=2048,
-            temperature=min(max(settings.LLM_TEMPERATURE, 0.15), 0.45),
-            top_p=0.9,
+            max_tokens=800,
+            temperature=settings.LLM_TEMPERATURE,
+            top_p=0.85,
+            frequency_penalty=0.1,
             stop=["\n\nUser:", "\n\nQ:", "(Hồ sơ)", "(EcoNutri)", "<|im_end|>"],
         )
         
@@ -260,20 +263,22 @@ class CloudLLMEngine(LocalLLMEngine):
         history_foods = [item.get("food_name") for item in recent_history if item.get("food_name")][:5]
         history_calories = sum(float(item.get("calories", 0) or 0) for item in recent_history)
 
-        user_context = (
-            f"Câu hỏi người dùng: {query}\n"
-            f"Thời gian hiện tại: {current_time} | Thời tiết: {current_weather}\n"
-            f"Hồ sơ: age={profile.get('age')}, gender={profile.get('gender')}, goal={profile.get('goal')}, "
-            f"activity_level={profile.get('activity_level')}\n"
-            f"Nhật ký gần đây: foods={history_foods if history_foods else 'không có'}, "
-            f"total_calories_recent={round(history_calories, 1)}\n"
-            f"Bữa ăn hiện tại: {current_meal}\n"
-            f"Mùa/vùng: season={seasonal.get('season')}, region={seasonal.get('region_code')}\n"
-            f"Rau gợi ý: {', '.join(veg) if veg else 'không có'}\n"
-            f"Đặc sản gợi ý: {', '.join(specs) if specs else 'không có'}\n"
-            f"Trích đoạn tài liệu: {docs if docs else 'không có'}\n"
-            f"Metadata nguồn: {metadatas if metadatas else 'không có'}"
-        )
+        # TỐI ƯU HÓA CHO CLOUD API
+        context_parts = [f"Câu hỏi người dùng: {query}"]
+        if profile.get('age'):
+            context_parts.append(f"Hồ sơ: age={profile.get('age')}, gender={profile.get('gender')}, goal={profile.get('goal')}, activity={profile.get('activity_level')}")
+        if history_foods:
+            context_parts.append(f"Nhật ký gần đây: {history_foods} (Calo: {round(history_calories, 1)})")
+        if current_meal != "N/A":
+            context_parts.append(f"Bữa ăn: {current_meal}")
+        if veg or specs:
+            context_parts.append(f"Mùa/vùng: {seasonal.get('season')}, {seasonal.get('region_code')}")
+            if veg: context_parts.append(f"Rau gợi ý: {', '.join(veg)}")
+            if specs: context_parts.append(f"Đặc sản: {', '.join(specs)}")
+        if docs:
+            context_parts.append(f"Tài liệu y khoa (RAG): {docs}")
+            
+        user_context = "\n".join(context_parts)
 
         system_prompt = self.prompts.get("base_system_prompt", "")
         if weekly_mode:
@@ -294,8 +299,10 @@ class CloudLLMEngine(LocalLLMEngine):
 
         payload = {
             "prompt": raw_prompt,
-            "max_tokens": 2048,
-            "temperature": min(max(settings.LLM_TEMPERATURE, 0.15), 0.45),
+            "max_tokens": 800,
+            "temperature": settings.LLM_TEMPERATURE,
+            "top_p": 0.85,
+            "frequency_penalty": 0.1,
             "stream": True,
             "stop": ["\n\nUser:", "\n\nQ:", "(Hồ sơ)", "(EcoNutri)", "<|im_end|>"]
         }
