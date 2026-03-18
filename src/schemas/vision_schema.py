@@ -13,7 +13,6 @@ class FoodDetection(BaseModel):
     carb: Optional[float] = 0.0
     fat: Optional[float] = 0.0
     sugar: Optional[float] = 0.0
-    fiber: Optional[float] = 0.0
     
     sodium: Optional[float] = 0.0
     potassium: Optional[float] = 0.0
@@ -23,6 +22,8 @@ class FoodDetection(BaseModel):
     vitamin_b: Optional[float] = 0.0
     vitamin_c: Optional[float] = 0.0
     vitamin_d: Optional[float] = 0.0
+    
+    fiber: Optional[float] = 0.0
     
     source: Optional[str] = None
 

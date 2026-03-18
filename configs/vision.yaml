@@ -1,6 +1,6 @@
 model:
   weights_path: "weights/yolo26n_best.pt"
-  conf_threshold: 0.3
+  conf_threshold: 0.7
   iou_threshold: 0.45
   img_size: 640
 

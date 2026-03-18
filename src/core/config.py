@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # --- CẤU HÌNH AI MODELS ---
     # YOLO Model
     YOLO_MODEL_PATH: Path = ROOT_DIR / "weights" / "yolo26n_best.pt"
-    YOLO_CONFIDENCE: float = 0.45
+    # YOLO_CONFIDENCE được quản lý trong configs/vision.yaml
     
     # Local LLM (Qwen via llama-cpp-python)
     LLM_MODEL_PATH: Path = ROOT_DIR / "weights" / "qwen2.5-3b-instruct-q4_k_m.gguf"
@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     # --- BIẾN MÔI TRƯỜNG (Sẽ đọc từ file .env) ---
     # Dù chạy local, đôi khi bạn vẫn cần API key cho Weather hoặc Maps nếu mở rộng
     OPENWEATHER_API_KEY: Optional[str] = None
-    SECRET_KEY: str = "hackathon-secret-key-2024"
+    SECRET_KEY: Optional[str] = None
 
     # Ưu tiên đọc từ file .env
     model_config = SettingsConfigDict(

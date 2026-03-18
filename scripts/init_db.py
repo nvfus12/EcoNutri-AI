@@ -1,40 +1,46 @@
 import sqlite3
 import os
+import sys
 import logging
+from pathlib import Path
+
+# Thêm thư mục gốc vào sys.path để import được src
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.core.config import settings
 
 # Cấu hình logging để dễ dàng theo dõi quá trình chạy script
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
-# Định nghĩa đường dẫn file (giả sử script được chạy từ thư mục gốc của project)
-DB_PATH = os.path.join("database", "econutri.db")
-SCHEMA_PATH = os.path.join("database", "schema.sql")
 
 def initialize_database():
     """
     Hàm đọc file schema.sql và thực thi để khởi tạo database.
     """
     # Kiểm tra xem file schema có tồn tại không
-    if not os.path.exists(SCHEMA_PATH):
-        logging.error(f"Không tìm thấy file cấu trúc cơ sở dữ liệu tại: {SCHEMA_PATH}")
+    schema_path = settings.BASE_DIR / "database" / "schema.sql"
+    if not schema_path.exists():
+        logging.error(f"Không tìm thấy file cấu trúc cơ sở dữ liệu tại: {schema_path}")
         return
 
     # Tạo thư mục database nếu chưa tồn tại
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    os.makedirs(settings.DB_PATH.parent, exist_ok=True)
 
-    logging.info(f"Bắt đầu khởi tạo cơ sở dữ liệu: {DB_PATH}")
+    logging.info(f"Bắt đầu khởi tạo cơ sở dữ liệu: {settings.DB_PATH}")
 
     # Đọc nội dung file schema.sql
     try:
-        with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        with open(schema_path, "r", encoding="utf-8") as f:
             schema_script = f.read()
     except Exception as e:
-        logging.error(f"Lỗi khi đọc file {SCHEMA_PATH}: {e}")
+        logging.error(f"Lỗi khi đọc file {schema_path}: {e}")
         return
 
     # Kết nối tới SQLite và thực thi script
     try:
         # Connect sẽ tự động tạo file econutri.db nếu nó chưa có
-        with sqlite3.connect(DB_PATH) as conn:
+        with sqlite3.connect(settings.DB_PATH) as conn:
             cursor = conn.cursor()
             
             # Sử dụng executescript để chạy nhiều câu lệnh SQL cùng lúc (CREATE, INSERT...)

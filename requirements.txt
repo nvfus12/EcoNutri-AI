@@ -1,3 +1,25 @@
+# --- Machine Learning & Safety Filter (Đã có sẵn) ---
 joblib>=1.3.0
-scikit-learn>=1.4.0
+scikit-learn==1.8.0
+
+# --- Core & Data (Xử lý dữ liệu) ---
 pandas>=2.0.0
+numpy>=1.24.0
+
+# --- Web Framework (Giao diện hiển thị) ---
+streamlit>=1.32.0
+
+# --- Deep Learning & AI Models (Nhận diện ảnh & Xử lý ngôn ngữ) ---
+ultralytics>=8.1.0
+llama-cpp-python>=0.2.56
+huggingface_hub>=0.20.0
+
+# --- Image Processing (Xử lý ảnh đầu vào) ---
+opencv-python-headless>=4.8.0
+Pillow>=10.0.0
+
+# --- Database & Utilities (Cơ sở dữ liệu Vector & Cấu hình hệ thống) ---
+chromadb>=0.4.22
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+PyYAML>=6.0.1

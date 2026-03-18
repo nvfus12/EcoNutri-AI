@@ -9,7 +9,7 @@ class SafetyRouter:
 
     def __init__(self, model_path: Optional[Path] = None):
         self.model = None
-        self.model_path = model_path or (Path(__file__).resolve().parent.parent.parent / "assets" / "safety_router.joblib")
+        self.model_path = model_path or (Path(__file__).resolve().parent.parent.parent / "weights" / "safety_filter_model.joblib")
         self._try_load_model()
 
     @staticmethod

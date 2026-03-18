@@ -45,9 +45,6 @@ logger = logging.getLogger(__name__)
 # Các định dạng ảnh được chấp nhận
 ALLOWED_EXTENSIONS: set[str] = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
-# Giới hạn kích thước file: 10 MB
-MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
-
 # Kích thước cạnh dài tối đa khi resize (YOLO sẽ nhận ảnh này)
 # YOLOv8n mặc định 640×640 - letterbox giữ nguyên tỷ lệ
 YOLO_INPUT_SIZE: int = 640
@@ -68,17 +65,6 @@ class ImageProcessingError(ValueError):
 # Hàm nội bộ (private helpers)
 # ---------------------------------------------------------------------------
 
-def _validate_file_size(raw_bytes: bytes) -> None:
-    """Kiểm tra kích thước file không vượt MAX_FILE_SIZE_BYTES."""
-    size = len(raw_bytes)
-    if size == 0:
-        raise ImageProcessingError("File ảnh rỗng (0 bytes).")
-    if size > MAX_FILE_SIZE_BYTES:
-        mb = size / (1024 * 1024)
-        raise ImageProcessingError(
-            f"File ảnh quá lớn ({mb:.1f} MB). Giới hạn tối đa là "
-            f"{MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB."
-        )
 
 
 def _validate_extension(filename: str) -> None:
@@ -250,7 +236,7 @@ class ImageProcessor:
 
         # Bước 1: Validate đầu vào
         _validate_extension(filename)
-        _validate_file_size(raw_bytes)
+        # Kích thước file đã được Streamlit tự động kiểm tra trước qua cấu hình maxUploadSize
 
         # Bước 2: Decode sang PIL → numpy RGB
         pil_img = _bytes_to_pil(raw_bytes)

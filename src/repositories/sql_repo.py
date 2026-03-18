@@ -28,21 +28,22 @@ class SQLRepository:
     def _ensure_seasonal_catalog(self) -> None:
         """Tạo bảng mùa vụ/đặc sản nếu thiếu và seed dữ liệu mẫu."""
         create_table_query = """
-            CREATE TABLE IF NOT EXISTS seasonal_food_catalog (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+            CREATE TABLE IF NOT EXISTS season (
+                season_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 food_name TEXT NOT NULL,
-                food_type TEXT NOT NULL,
-                region_code TEXT NOT NULL,
-                month_start INTEGER NOT NULL,
-                month_end INTEGER NOT NULL,
+                food_type TEXT NOT NULL CHECK(food_type IN ('rau', 'dac_san')),
+                region_code TEXT NOT NULL CHECK(region_code IN ('bac', 'trung', 'nam')),
+                month_start INTEGER NOT NULL CHECK(month_start BETWEEN 1 AND 12),
+                month_end INTEGER NOT NULL CHECK(month_end BETWEEN 1 AND 12),
                 note TEXT,
                 source TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(food_name, food_type, region_code, month_start, month_end)
             );
         """
         create_index_query = """
-            CREATE INDEX IF NOT EXISTS idx_seasonal_region_month
-            ON seasonal_food_catalog(region_code, month_start, month_end);
+            CREATE INDEX IF NOT EXISTS idx_season_region_month
+            ON season(region_code, month_start, month_end);
         """
         seed_rows = [
             ("Rau cai ngot", "rau", "bac", 10, 2, "Hop mua lanh", "local"),
@@ -63,7 +64,7 @@ class SQLRepository:
             ("Hu tieu Nam Vang", "dac_san", "nam", 1, 12, "Pho bien mien Nam", "local"),
         ]
         insert_query = """
-            INSERT OR IGNORE INTO seasonal_food_catalog
+            INSERT OR IGNORE INTO season
             (food_name, food_type, region_code, month_start, month_end, note, source)
             VALUES (?, ?, ?, ?, ?, ?, ?);
         """
@@ -92,24 +93,17 @@ class SQLRepository:
         raise ValueError("at_time phải là datetime hoặc chuỗi 'YYYY-MM-DD'/'YYYY-MM'.")
 
     @staticmethod
-    def resolve_region_from_location(location: Optional[str]) -> str:
-        """Chuẩn hóa location text thành mã vùng: bac/trung/nam."""
-        if not location:
+    def resolve_region_from_coordinates(lat: Optional[float]) -> str:
+        """Xác định mã vùng (bac/trung/nam) dựa vào Vĩ độ (Latitude) của Việt Nam."""
+        if lat is None or lat == 0.0:
             return "nam"
 
-        normalized = location.lower()
-        north_keywords = ["ha noi", "hanoi", "hai phong", "quang ninh", "bac", "thai nguyen", "nam dinh"]
-        central_keywords = ["da nang", "hue", "quang nam", "quang ngai", "nha trang", "trung", "binh dinh"]
-        south_keywords = ["ho chi minh", "hcm", "sai gon", "can tho", "vung tau", "dong nai", "nam"]
-
-        if any(keyword in normalized for keyword in north_keywords):
+        if lat >= 19.0:
             return "bac"
-        if any(keyword in normalized for keyword in central_keywords):
+        elif 11.5 <= lat < 19.0:
             return "trung"
-        if any(keyword in normalized for keyword in south_keywords):
+        else:
             return "nam"
-
-        return "nam"
 
     @staticmethod
     def _month_to_season(month: int) -> str:
@@ -127,12 +121,12 @@ class SQLRepository:
             INSERT INTO user_profile (
                 name, age, gender, height_cm, weight_kg, job,
                 activity_level, allergies, medical_conditions, goal,
-                bmi, bmr, tdee, body_fat_percent, location
+                bmi, bmr, tdee, body_fat_percent
             )
             VALUES (
                 :name, :age, :gender, :height_cm, :weight_kg, :job,
                 :activity_level, :allergies, :medical_conditions, :goal,
-                :bmi, :bmr, :tdee, :body_fat_percent, :location
+                :bmi, :bmr, :tdee, :body_fat_percent
             )
         """
         with self.get_connection() as conn:
@@ -158,7 +152,6 @@ class SQLRepository:
             "bmr": user_data.get("bmr"),
             "tdee": user_data.get("tdee"),
             "body_fat_percent": user_data.get("body_fat_percent"),
-            "location": user_data.get("location", "Ho Chi Minh"),
         }
 
         existing = self.get_user_profile(user_id)
@@ -179,14 +172,20 @@ class SQLRepository:
                     bmi = :bmi,
                     bmr = :bmr,
                     tdee = :tdee,
-                    body_fat_percent = :body_fat_percent,
-                    location = :location
+                    body_fat_percent = :body_fat_percent
                 WHERE user_id = :user_id
             """
             payload = {**safe_data, "user_id": user_id}
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(update_query, payload)
+                
+                # Ghi nhận tự động lịch sử thay đổi cân nặng
+                if safe_data["weight_kg"] > 0:
+                    cursor.execute(
+                        "INSERT INTO user_weight_history (user_id, weight_kg) VALUES (?, ?)",
+                        (user_id, safe_data["weight_kg"])
+                    )
                 conn.commit()
             return user_id
 
@@ -194,18 +193,25 @@ class SQLRepository:
             INSERT INTO user_profile (
                 user_id, name, age, gender, height_cm, weight_kg, job,
                 activity_level, allergies, medical_conditions, goal,
-                bmi, bmr, tdee, body_fat_percent, location
+                    bmi, bmr, tdee, body_fat_percent
             )
             VALUES (
                 :user_id, :name, :age, :gender, :height_cm, :weight_kg, :job,
                 :activity_level, :allergies, :medical_conditions, :goal,
-                :bmi, :bmr, :tdee, :body_fat_percent, :location
+                    :bmi, :bmr, :tdee, :body_fat_percent
             )
         """
         payload = {**safe_data, "user_id": user_id}
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(insert_query, payload)
+            
+            # Ghi nhận tự động lịch sử thay đổi cân nặng
+            if safe_data["weight_kg"] > 0:
+                cursor.execute(
+                    "INSERT INTO user_weight_history (user_id, weight_kg) VALUES (?, ?)",
+                    (user_id, safe_data["weight_kg"])
+                )
             conn.commit()
         return user_id
 
@@ -224,6 +230,27 @@ class SQLRepository:
             cursor.execute(query, (food_name,))
             row = cursor.fetchone()
             return dict(row) if row else None
+
+    def search_nutrition_facts(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Tìm kiếm thông tin dinh dưỡng của các món ăn được nhắc đến trong câu hỏi."""
+        if not query:
+            return []
+            
+        import unicodedata
+        # Bỏ dấu tiếng Việt để so khớp với dữ liệu dạng không dấu (slug) trong DB
+        normalized_query = unicodedata.normalize('NFD', query).encode('ascii', 'ignore').decode('utf-8').lower()
+        
+        sql_query = """
+            SELECT * 
+            FROM nutrition_reference 
+            WHERE ? LIKE '%' || LOWER(REPLACE(food_name, '-', ' ')) || '%'
+               OR ? LIKE '%' || LOWER(food_name) || '%'
+            LIMIT ?
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql_query, (normalized_query, normalized_query, limit))
+            return [dict(row) for row in cursor.fetchall()]
 
     def save_vision_log(self, user_id: int, food_name: str, calories: float, image_path: str) -> int:
         query = """
@@ -304,75 +331,141 @@ class SQLRepository:
             result = cursor.fetchone()
             return float(result["total_cal"] or 0.0) if result else 0.0
 
+    def get_weight_history(self, user_id: int) -> List[Dict[str, Any]]:
+        query = """
+            SELECT weight_kg, recorded_at 
+            FROM user_weight_history 
+            WHERE user_id = ? 
+            ORDER BY recorded_at ASC
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_nutrition_history(self, user_id: int) -> List[Dict[str, Any]]:
+        query = """
+            SELECT calories, protein, created_at 
+            FROM nutrition_diary 
+            WHERE user_id = ? 
+            ORDER BY created_at ASC
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
     def get_user_meal_history(self, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
         return self.get_recent_diary(user_id=user_id, limit=limit)
 
     def get_seasonal_foods(
         self,
-        location: str,
+        region_code: str = "nam",
         at_time: Optional[Any] = None,
         food_type: Optional[str] = None,
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
         """Truy vấn danh sách rau/đặc sản theo vùng và thời gian."""
         month = self._parse_month(at_time)
-        region_code = self.resolve_region_from_location(location)
-
-        base_query = """
-            SELECT food_name, food_type, region_code, month_start, month_end, note, source
-            FROM seasonal_food_catalog
-            WHERE region_code = ?
-              AND (
-                    (month_start <= month_end AND ? BETWEEN month_start AND month_end)
-                    OR
-                    (month_start > month_end AND (? >= month_start OR ? <= month_end))
-              )
-        """
-        params: List[Any] = [region_code, month, month, month]
-
-        if food_type:
-            base_query += " AND food_type = ?"
-            params.append(food_type)
-
-        base_query += " ORDER BY food_type ASC, food_name ASC LIMIT ?"
-        params.append(limit)
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(base_query, tuple(params))
+            
+            if food_type == "dac_san":
+                # Bản nâng cấp: Gộp dữ liệu từ bảng chuẩn hoá và bảng phẳng (season)
+                zone_map = {"bac": "Bắc", "trung": "Trung", "nam": "Nam"}
+                zone_keyword = f"%{zone_map.get(region_code, '')}%"
+                
+                query = """
+                    SELECT rs.specialty_name as food_name, 
+                           'dac_san' as food_type, 
+                           ? as region_code, 
+                           s.month_start, 
+                           s.month_end, 
+                           rs.peak_harvest_note as note,
+                           'Từ hệ thống chuẩn hoá' as source
+                    FROM regional_specialties rs
+                    JOIN regions r ON rs.region_id = r.region_id
+                    JOIN specialty_seasons ss ON rs.specialty_id = ss.specialty_id
+                    JOIN seasons s ON ss.season_id = s.season_id
+                    WHERE r.geographic_zone LIKE ?
+                      AND (
+                            (s.month_start <= s.month_end AND ? BETWEEN s.month_start AND s.month_end)
+                            OR
+                            (s.month_start > s.month_end AND (? >= s.month_start OR ? <= s.month_end))
+                      )
+                    UNION
+                    SELECT food_name, food_type, region_code, month_start, month_end, note, source
+                    FROM season
+                    WHERE region_code = ? AND food_type = 'dac_san'
+                      AND (
+                            (month_start <= month_end AND ? BETWEEN month_start AND month_end)
+                            OR
+                            (month_start > month_end AND (? >= month_start OR ? <= month_end))
+                      )
+                    ORDER BY food_name ASC
+                    LIMIT ?
+                """
+                params = [
+                    region_code, zone_keyword, month, month, month,
+                    region_code, month, month, month,
+                    limit
+                ]
+                cursor.execute(query, params)
+            else:
+                base_query = """
+                    SELECT food_name, food_type, region_code, month_start, month_end, note, source
+                    FROM season
+                    WHERE region_code = ?
+                """
+                params: List[Any] = [region_code]
+                
+                if food_type:
+                    base_query += " AND food_type = ?"
+                    params.append(food_type)
+                    
+                base_query += """
+                  AND (
+                        (month_start <= month_end AND ? BETWEEN month_start AND month_end)
+                        OR
+                        (month_start > month_end AND (? >= month_start OR ? <= month_end))
+                  )
+                  ORDER BY food_name ASC LIMIT ?
+                """
+                params.extend([month, month, month, limit])
+                cursor.execute(base_query, params)
+                
             return [dict(row) for row in cursor.fetchall()]
 
     def get_personalized_seasonal_recommendations(
         self,
         user_id: Optional[int] = None,
-        location: Optional[str] = None,
         at_time: Optional[Any] = None,
         limit: int = 10,
+        lat: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Method tổng hợp theo user + vùng + thời gian.
         Trả về cả rau và đặc sản phù hợp cho ngữ cảnh hiện tại.
         """
-        profile = self.get_user_profile(user_id) if user_id is not None else None
-        effective_location = location or (profile.get("location") if profile else None) or "Ho Chi Minh"
         month = self._parse_month(at_time)
-        region_code = self.resolve_region_from_location(effective_location)
+        region_code = self.resolve_region_from_coordinates(lat)
 
         vegetables = self.get_seasonal_foods(
-            location=effective_location,
+            region_code=region_code,
             at_time=at_time,
             food_type="rau",
             limit=limit,
         )
         specialties = self.get_seasonal_foods(
-            location=effective_location,
+            region_code=region_code,
             at_time=at_time,
             food_type="dac_san",
             limit=limit,
         )
 
         return {
-            "location": effective_location,
+            "latitude": lat,
             "region_code": region_code,
             "month": month,
             "season": self._month_to_season(month),

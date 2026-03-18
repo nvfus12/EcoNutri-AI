@@ -1,10 +1,13 @@
 from pathlib import Path
 from src.repositories.sql_repo import SQLRepository
-from src.repositories.nutrition_fact_repo import NutritionFactRepository
 from src.utils.image_processor import ImageProcessor
 from src.services.user_service import UserService
 from src.services.safety_router import SafetyRouter
+from src.engines.calculator import NutritionCalculator
+from src.services.weather_service import WeatherService
+from datetime import datetime
 import re
+import time
 
 class ContextOrchestrator:
     def __init__(self, vision_engine, sql_repo, vector_repo, llm_engine):
@@ -15,7 +18,6 @@ class ContextOrchestrator:
         self.img_processor = ImageProcessor()
         self.user_service = UserService()
         self.safety_router = SafetyRouter()
-        self.nutrition_fact_repo = NutritionFactRepository()
 
     @staticmethod
     def _is_numeric_nutrition_query(text: str) -> bool:
@@ -26,6 +28,53 @@ class ContextOrchestrator:
                 lowered,
             )
         )
+
+    def get_user_profile(self, user_id: int):
+        """Ủy quyền lấy hồ sơ người dùng (Tránh UI gọi trực tiếp DB)."""
+        return self.sql_repo.get_user_profile(user_id)
+
+    def upsert_user_profile(self, user_id: int, user_data: dict):
+        """Tự động tính toán chỉ số cơ thể trước khi lưu hồ sơ xuống DB."""
+        weight = float(user_data.get("weight_kg", 0) or 0)
+        height = float(user_data.get("height_cm", 0) or 0)
+        age = int(user_data.get("age", 0) or 0)
+        gender = user_data.get("gender", "other")
+        activity_level = user_data.get("activity_level", "sedentary")
+        
+        # Chỉ tính toán khi người dùng đã nhập đủ số đo cơ bản
+        if weight > 0 and height > 0 and age > 0:
+            try:
+                bmi_res = NutritionCalculator.calculate_bmi(weight, height)
+                user_data["bmi"] = bmi_res["bmi"]
+                
+                bmr = NutritionCalculator.calculate_bmr(weight, height, age, gender)
+                user_data["bmr"] = bmr
+                
+                tdee = NutritionCalculator.calculate_tdee(bmr, activity_level)
+                user_data["tdee"] = tdee
+                
+                body_fat = NutritionCalculator.estimate_body_fat(bmi_res["bmi"], age, gender)
+                user_data["body_fat_percent"] = body_fat
+            except Exception:
+                pass  # Bỏ qua nếu có lỗi ngoại lệ (vd: thiếu constants)
+
+        return self.sql_repo.upsert_user_profile(user_id, user_data)
+
+    def get_macro_targets(self, tdee: float, goal: str):
+        return NutritionCalculator.get_macro_targets(tdee, goal)
+
+    def get_weight_history(self, user_id: int):
+        return self.sql_repo.get_weight_history(user_id)
+
+    def get_nutrition_history(self, user_id: int):
+        return self.sql_repo.get_nutrition_history(user_id)
+
+    def get_user_diary(self, user_id: int, limit: int = 50):
+        """Ủy quyền lấy nhật ký ăn uống của người dùng."""
+        return self.sql_repo.get_recent_diary(user_id, limit)
+
+    def get_daily_calories(self, user_id: int, date_str: str):
+        return self.sql_repo.get_daily_calories(user_id, date_str)
 
     def process_full_vision_flow(self, raw_image_path: str, user_id: int):
         """Luồng 2B: Tiền xử lý -> Nhận diện -> Đối chiếu DB -> Lưu Diary"""
@@ -53,6 +102,27 @@ class ContextOrchestrator:
         vision_res = self.vision_engine.predict(str(processed_img.saved_path))
         vision_res.image_path = str(processed_img.saved_path)
         
+        # --- BỘ LỌC ĐỘ TIN CẬY (CONFIDENCE FILTER) ---
+        # Chặn các nhận diện sai (False Positive) như khuôn mặt thành món ăn
+        MIN_CONFIDENCE = 0.7  
+        filtered_items = []
+        for item in vision_res.detected_items:
+            conf = getattr(item, "confidence", 1.0)
+            if conf is None or conf >= MIN_CONFIDENCE:
+                filtered_items.append(item)
+        vision_res.detected_items = filtered_items
+
+        # Nếu không nhận diện được món ăn nào, xóa ảnh vật lý và bỏ qua việc lưu DB
+        if not vision_res.detected_items:
+            try:
+                path_to_remove = Path(processed_img.saved_path)
+                if path_to_remove.exists():
+                    path_to_remove.unlink()
+            except Exception:
+                pass
+            vision_res.image_path = None
+            return vision_res
+
         # 3. Tra cứu dinh dưỡng & tính toán - calculator.py (gọi qua repo)
         for item in vision_res.detected_items:
             data = self.sql_repo.get_nutrition_ref(item.food_name)
@@ -68,7 +138,7 @@ class ContextOrchestrator:
         
         return vision_res
 
-    def get_personalized_advice(self, user_id: int, user_query: str, current_vision_res=None, recent_chat=None):
+    def get_personalized_advice(self, user_id: int, user_query: str, current_vision_res=None, recent_chat=None, user_lat=None, user_lon=None):
         """Luồng 2C: Gom Context (Profile + Diary + Season + RAG) -> LLM"""
         # 1. Lấy Profile & Nhật ký gần đây
         profile = self.sql_repo.get_user_profile(user_id)
@@ -76,17 +146,25 @@ class ContextOrchestrator:
         # 1.1. Chặn truy vấn y khoa/không an toàn trước khi vào LLM.
         safety_result = self.safety_router.route(user_query)
         if safety_result.get("is_unsafe"):
-            return safety_result.get("response")
+            def safety_stream():
+                text = safety_result.get("response", "")
+                for i in range(0, len(text), 4):
+                    yield text[i:i+4]
+                    time.sleep(0.015)
+            return (safety_stream(), {})
 
         history = self.sql_repo.get_recent_diary(user_id, limit=5)
         
         # 2. Lấy rau + đặc sản theo vùng và thời gian hiện tại
-        user_location = profile.get("location") if profile else None
+        
+        current_time = datetime.now().strftime("%d/%m/%Y %H:%M")
+        current_weather = WeatherService.get_current_weather(lat=user_lat, lon=user_lon)
+
         seasonal_info = self.sql_repo.get_personalized_seasonal_recommendations(
             user_id=user_id,
-            location=user_location,
             at_time=None,
             limit=6,
+            lat=user_lat,
         )
         
         # 3. Truy xuất tri thức y khoa - RAG
@@ -100,19 +178,20 @@ class ContextOrchestrator:
                 "notice": "Vector repository chưa khởi tạo, đang chạy chế độ không RAG.",
             }
 
-        structured_facts = self.nutrition_fact_repo.search_by_query(user_query, limit=5)
+        structured_facts = self.sql_repo.search_nutrition_facts(user_query, limit=5)
 
         # Với câu hỏi cần số liệu mà không có dữ liệu tin cậy thì không gọi LLM để tránh bịa số.
         if self._is_numeric_nutrition_query(user_query):
             has_docs = bool(kb_context.get("documents"))
             if not structured_facts and not has_docs:
                 return (
-                    "Data not available: Hiện chưa có dữ liệu định lượng đáng tin cậy cho truy vấn này. "
-                    "Vui lòng bổ sung nguồn bảng dinh dưỡng (CSV/JSON) hoặc tài liệu chuẩn trước khi tư vấn số liệu."
+                    "Data not available: Hiện chưa có dữ liệu định lượng đáng tin cậy cho truy vấn này."
                 )
         
         # 4. Hợp nhất ngữ cảnh thành Prompt (Dựa trên configs/prompts.yaml)
         context = {
+            "current_time": current_time,
+            "current_weather": current_weather,
             "profile": profile,
             "recent_history": history,
             "current_meal": current_vision_res.dict() if current_vision_res else "N/A",
@@ -149,8 +228,8 @@ class ContextOrchestrator:
         
         return (fallback_stream(), {})
 
-    def get_advice_suffix(self, context):
+    def get_advice_suffix(self, context, response_text: str = ""):
         """Lấy phần phụ lục (citations, warnings) từ LLM engine."""
         if self.llm_engine and context:
-            return self.llm_engine.get_response_suffix(context)
+            return self.llm_engine.get_response_suffix(context, response_text)
         return ""
