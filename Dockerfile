@@ -13,6 +13,9 @@ WORKDIR /app
 
 # Copy file requirements và cài đặt
 COPY requirements.txt .
+
+# Cập nhật công cụ build và setuptools (cung cấp distutils) trước khi cài đặt
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy toàn bộ mã nguồn vào container
