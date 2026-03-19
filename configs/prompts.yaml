@@ -12,10 +12,9 @@ base_system_prompt: |
 
 daily_advice_prompt: |
   Hãy trả lời câu hỏi của người dùng dựa trên hồ sơ hiện tại.
-  Cấu trúc bắt buộc:
-  1) Tóm tắt ngắn gọn vấn đề.
-  2) Gợi ý cụ thể cho hôm nay (có định lượng gần đúng nếu phù hợp).
-  3) Lưu ý/Cảnh báo (nếu món ăn không phù hợp mục tiêu).
+  Yêu cầu:
+  - Tư vấn linh hoạt, tự nhiên như một cuộc trò chuyện với chuyên gia.
+  - Cung cấp gợi ý rõ ràng, đi thẳng vào trọng tâm câu hỏi và khéo léo lồng ghép các lưu ý nếu cần thiết.
   *Lưu ý: Không tự ý nhắc đến "Trích dẫn nội bộ" trong nội dung câu trả lời của bạn, hệ thống sẽ tự động đính kèm nếu có.*
 
 

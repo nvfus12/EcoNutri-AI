@@ -165,6 +165,14 @@ class LocalLLMEngine:
         else:
             system_prompt += "\n" + self.prompts.get("daily_advice_prompt", "")
 
+        # Bổ sung các chỉ thị ép buộc (override) văn phong tự nhiên, tránh cứng nhắc
+        system_prompt += (
+            "\n\n[HƯỚNG DẪN VĂN PHONG - BẮT BUỘC]\n"
+            "- Trả lời tự nhiên, thân thiện, đồng cảm và linh hoạt như một chuyên gia tư vấn.\n"
+            "- KHÔNG BAO GIỜ sử dụng các cụm từ cứng nhắc như 'Tóm tắt ngắn gọn vấn đề', 'Gợi ý cụ thể', hay 'Lưu ý/Cảnh báo'.\n"
+            "- Đa dạng hóa câu trả lời, tuyệt đối không lặp lại y hệt định dạng của các câu trả lời trước.\n"
+        )
+
         # Lắp ráp thủ công chuỗi Prompt theo chuẩn ChatML
         raw_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
         
@@ -184,9 +192,12 @@ class LocalLLMEngine:
             stream=True,  # Bật chế độ streaming
             max_tokens=800,
             temperature=settings.LLM_TEMPERATURE,
-            top_p=0.85,
-            frequency_penalty=0.1,
-            stop=["\n\nUser:", "\n\nQ:", "(Hồ sơ)", "(EcoNutri)", "<|im_end|>"],
+            top_p=0.9,              # Nâng top_p để câu văn mượt mà và đa dạng hơn
+            top_k=40,               # Thêm top_k để chặn LLM sinh ra các từ vô nghĩa
+            repeat_penalty=1.15,    # Thêm phạt lặp lại đặc trưng của Llama.cpp để triệt để giảm lặp ý câu trả lời trước
+            frequency_penalty=0.5,  # Tăng thêm hình phạt tần suất
+            presence_penalty=0.5,   # Tăng thêm hình phạt hiện diện
+            stop=["\n\nUser:", "\n\nQ:", "(Hồ sơ)", "(EcoNutri)", "<|im_end|>", "<|endoftext|>"],
         )
         
         # Yield từng token từ stream

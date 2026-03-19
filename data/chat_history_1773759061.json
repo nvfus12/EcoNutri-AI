@@ -8,7 +8,15 @@
       },
       {
         "role": "assistant",
-        "content": "Tóm tắt ngắn gọn vấn đề: Bạn đang thắc mắc về thực phẩm nên ăn hôm nay để duy trì sức khỏe, với độ tuổi 19, giới tính nam và hoạt động thể chất thường xuyên.\n\nGợi ý cụ thể cho hôm nay: Bạn có thể tham khảo các món ăn như Bún chả Hà Nội hoặc Cá cơ vong nếu thích đặc sản. Ngoài ra, hãy bổ sung các loại rau như Bắp cải, Rau ngót và Su hào vào thực đơn của mình. Tối nay, thay vì ăn bánh chưng và phở nhiều như trong nhật ký gần đây, bạn nên chọn một bữa ăn nhẹ hơn, như salad rau luộc hoặc cá hấp. \n\nLưu ý/Cảnh báo: Thực đơn bạn đã đăng ký gần đây có tổng calo là 2600 kcal, nên cần điều chỉnh lượng calo để phù hợp với mục tiêu duy trì cân nặng."
+        "content": "Dựa trên thông tin bạn cung cấp, hôm nay tôi khuyên bạn nên thay đổi một chút khẩu phần ăn của mình. Bạn đã tiêu thụ nhiều phở và bánh chưng trong những ngày gần đây, điều này có thể khiến cân nặng tăng lên nếu không chú trọng dinh dưỡng.\n\nĐầu tiên, hãy giảm lượng phở và bánh chưng hôm nay đi để tránh tích tụ calo thừa. Thay vào đó, bạn nên bổ sung thêm rau xanh như su hào, bắp cải hay rau ngót vì chúng giàu chất xơ, vitamin và khoáng chất tốt cho sức khỏe.\n\nBạn cũng có thể thử một chút đặc sản từ vùng Bac nếu thích - Bun cha Ha Noi hoặc Cha ca La Vong. Những món này thường được làm từ các nguyên liệu địa phương tươi ngon như cá, bí đỏ... rất bổ dưỡng và giàu protein.\n\nVề cân nặng bạn đang cố gắng duy trì nên không cần quá lo lắng về vấn đề tăng cân nhanh chóng vì đây là một hoạt động thể lực mạnh mẽ của bạn. Tuy nhiên, hãy chú ý đến khẩu phần ăn trong dài hạn để đảm bảo đủ dinh dưỡng cho cơ thể.\n\nTrong trường hợp muốn thêm vào bữa trưa hoặc tối hôm nay, bạn có thể thử món Bun cha Ha Noi với thịt heo xé phay và cải bắp. Hoặc nếu thích cá thì Cha ca La Vong cũng rất ngon cùng các loại rau thơm như hành lá.\n\nChúc bạn ăn ngon!"
+      },
+      {
+        "role": "user",
+        "content": "ngoài những món trên thì bạn còn gợi ý món gì ko"
+      },
+      {
+        "role": "assistant",
+        "content": "Theo hồ sơ hiện tại của bạn, tập trung vào việc duy trì cân nặng và hoạt động thể lực mạnh mẽ, hôm nay tôi khuyên bạn nên thử một số món ăn mới để thay đổi khẩu phần. \n\nĐầu tiên, hãy giảm lượng phở và bánh chưng hôm nay đi để tránh tích tụ calo thừa. Thay vào đó, bạn có thể thêm các loại rau như bắp cải hoặc su hào vì chúng rất giàu chất xơ, vitamin và khoáng chất tốt cho sức khỏe.\n\nVề bữa trưa hoặc tối hôm nay, tôi gợi ý thử một chút đặc sản từ vùng Bac - Bun cha Ha Noi. Món này thường được làm với thịt heo xé phay cùng cải bắp. Hoặc nếu thích cá thì bạn có thể thưởng thức Cha ca La Vong cũng rất ngon và bổ dưỡng.\n\nĐể tăng cường dinh dưỡng, bạn nên ăn một ít rau ngót hoặc su hào vào bữa trưa để cung cấp thêm chất xơ cho cơ thể. \n\nChú ý rằng mục tiêu của bạn là duy trì cân nặng hiện tại vì đây là hoạt động thể lực mạnh mẽ của bạn trong mùa xuân ở vùng Bac.\n\nCuối cùng, hãy chú trọng đến việc kiểm soát lượng calo và khẩu phần ăn tổng hợp để đảm bảo đủ dinh dưỡng cho cơ thể."
       }
     ]
   }
