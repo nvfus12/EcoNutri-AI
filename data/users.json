@@ -10,5 +10,9 @@
   "hachimi": {
     "password": "9102a192e94a0033028df701f40bfd589a835f62b19fbb385c1d1068f088179a",
     "user_id": 1773894992
+  },
+  "test": {
+    "password": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "user_id": 1773905075
   }
 }
