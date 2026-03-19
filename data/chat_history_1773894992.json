@@ -1,0 +1,15 @@
+{
+  "1773895063396": {
+    "title": "hi",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi"
+      },
+      {
+        "role": "assistant",
+        "content": "Tóm tắt ngắn gọn vấn đề: Người dùng đang muốn biết về các gợi ý thực phẩm cho mùa xuân và đặc sản vùng Bắc Việt Nam.\n\nGợi ý cụ thể cho hôm nay:\n- Ăn Bắp Cải 200g: Bắp cải rất giàu vitamin C, giúp tăng cường hệ miễn dịch, tốt cho sức khỏe mùa này.\n- Ăn Rau Ngót 100g: Rau ngót cung cấp nhiều chất xơ, protein và các loại vitamin, có thể nấu cháo với bắp cải.\n- Ăn Su Hào 100g: Su hào cung cấp vitamin A, tốt cho sức khỏe mắt, cũng có thể nấu cháo với bắp cải.\n- Ăn Bun cha Ha Noi 100g: Bun cha có thể chế biến từ nhiều loại rau khác như bắp cải, rau ngót, su hào, phù hợp với khẩu vị Bắc Bộ.\n\nLưu ý/Cảnh báo: Bắp cải có thể gây dị ứng cho một số người, nên thử ăn một lượng nhỏ trước khi ăn nhiều.\n\n**Gợi ý:** Để tư vấn chính xác hơn, bạn nên bổ sung: tuổi, giới tính, chiều cao, cân nặng, mức vận động, mục tiêu."
+      }
+    ]
+  }
+}
