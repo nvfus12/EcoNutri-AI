@@ -1,0 +1,15 @@
+{
+  "1773920164617": {
+    "title": "hi",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi"
+      },
+      {
+        "role": "assistant",
+        "content": "Tóm tắt ngắn gọn vấn đề: Người dùng muốn biết liệu họ nên ăn gì hôm nay, đặc biệt là sau khi đã ăn phở hai bữa gần đây.\n\nGợi ý cụ thể cho hôm nay: Bạn nên chọn món ăn nhẹ như rau (bắp cải, rau ngót, su hào) hoặc đặc sản địa phương như bun cha Ha Noi. Bạn cũng có thể thử một chút bánh cuốn nước xương Cao Bằng hoặc bánh chưng đậu nếu muốn thêm một chút biến hóa. Cần nhớ rằng sau hai bữa phở, bạn nên hạn chế ăn phở và tăng cường các loại rau để bổ sung chất xơ và vitamin.\n\nLưu ý/Cảnh báo: Ăn quá nhiều phở có thể khiến bạn tăng cân, đặc biệt là khi kết hợp với các loại rau ít calo. Nếu mục tiêu là giảm cân hoặc giữ cân, nên hạn chế ăn phở và tăng cường các loại rau xanh.\n\n**Gợi ý:** Để tư vấn chính xác hơn, bạn nên bổ sung: tuổi, giới tính, chiều cao, cân nặng, mức vận động, mục tiêu."
+      }
+    ]
+  }
+}
