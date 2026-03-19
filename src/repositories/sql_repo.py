@@ -46,22 +46,22 @@ class SQLRepository:
             ON season(region_code, month_start, month_end);
         """
         seed_rows = [
-            ("Rau cai ngot", "rau", "bac", 10, 2, "Hop mua lanh", "local"),
-            ("Rau cai thia", "rau", "bac", 11, 2, "Giau chat xo", "local"),
-            ("Rau muong", "rau", "bac", 4, 9, "Pho bien mua nong", "local"),
-            ("Sua hao", "rau", "bac", 11, 2, "Rau mua dong", "local"),
-            ("Bun cha Ha Noi", "dac_san", "bac", 1, 12, "Dac san vung Bac", "local"),
-            ("Cha ca La Vong", "dac_san", "bac", 1, 12, "Dac san vung Bac", "local"),
-            ("Rau tap tang", "rau", "trung", 3, 8, "Mon rau dia phuong", "local"),
-            ("Bau", "rau", "trung", 5, 10, "Mat cho mua he", "local"),
-            ("Bi do", "rau", "trung", 9, 2, "Tot cho tieu hoa", "local"),
-            ("Mi Quang", "dac_san", "trung", 1, 12, "Dac san mien Trung", "local"),
-            ("Bun bo Hue", "dac_san", "trung", 1, 12, "Dac san mien Trung", "local"),
-            ("Rau day", "rau", "nam", 5, 11, "Hop khi hau am", "local"),
-            ("Rau den", "rau", "nam", 4, 10, "Pho bien o mien Nam", "local"),
-            ("Bong bi", "rau", "nam", 6, 11, "Rau mua mua", "local"),
-            ("Com tam Sai Gon", "dac_san", "nam", 1, 12, "Dac san mien Nam", "local"),
-            ("Hu tieu Nam Vang", "dac_san", "nam", 1, 12, "Pho bien mien Nam", "local"),
+            ("Rau cải ngọt", "rau", "bac", 10, 2, "Hợp mùa lạnh", "local"),
+            ("Rau cải thìa", "rau", "bac", 11, 2, "Giàu chất xơ", "local"),
+            ("Rau muống", "rau", "bac", 4, 9, "Phổ biến mùa nóng", "local"),
+            ("Su hào", "rau", "bac", 11, 2, "Rau mùa đông", "local"),
+            ("Bún chả Hà Nội", "dac_san", "bac", 1, 12, "Đặc sản vùng Bắc", "local"),
+            ("Chả cá Lã Vọng", "dac_san", "bac", 1, 12, "Đặc sản vùng Bắc", "local"),
+            ("Rau tập tàng", "rau", "trung", 3, 8, "Món rau địa phương", "local"),
+            ("Bầu", "rau", "trung", 5, 10, "Mát cho mùa hè", "local"),
+            ("Bí đỏ", "rau", "trung", 9, 2, "Tốt cho tiêu hoá", "local"),
+            ("Mì Quảng", "dac_san", "trung", 1, 12, "Đặc sản miền Trung", "local"),
+            ("Bún bò Huế", "dac_san", "trung", 1, 12, "Đặc sản miền Trung", "local"),
+            ("Rau đay", "rau", "nam", 5, 11, "Hợp khí hậu ấm", "local"),
+            ("Rau dền", "rau", "nam", 4, 10, "Phổ biến ở miền Nam", "local"),
+            ("Bông bí", "rau", "nam", 6, 11, "Rau mùa mưa", "local"),
+            ("Cơm tấm Sài Gòn", "dac_san", "nam", 1, 12, "Đặc sản miền Nam", "local"),
+            ("Hủ tiếu Nam Vang", "dac_san", "nam", 1, 12, "Phổ biến miền Nam", "local"),
         ]
         insert_query = """
             INSERT OR IGNORE INTO season

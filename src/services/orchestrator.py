@@ -10,6 +10,32 @@ import re
 import time
 
 class ContextOrchestrator:
+    # Bảng ánh xạ YOLO labels (không dấu) sang tiếng Việt có dấu chuẩn
+    # Đảm bảo LLM nhận được context đúng chính tả, không bị nhiễm "thói quen" viết không dấu
+    FOOD_NAME_MAP = {
+        "bun cha": "Bún chả",
+        "bun cha ha noi": "Bún chả Hà Nội",
+        "bun bo hue": "Bún bò Huế",
+        "bun dau mam tom": "Bún đậu mắm tôm",
+        "pho": "Phở",
+        "banh mi": "Bánh mì",
+        "com tam": "Cơm tấm",
+        "com tam sai gon": "Cơm tấm Sài Gòn",
+        "mi quang": "Mì Quảng",
+        "hu tieu": "Hủ tiếu",
+        "hu tieu nam vang": "Hủ tiếu Nam Vang",
+        "banh cuon": "Bánh cuốn",
+        "banh xeo": "Bánh xèo",
+        "xoi": "Xôi",
+        "ca kho": "Cá kho",
+        "thit kho": "Thịt kho",
+        "rau muong": "Rau muống",
+        "bap cai": "Bắp cải",
+        "su hao": "Su hào",
+        "rau ngot": "Rau ngót",
+        "rau cai": "Rau cải"
+    }
+
     def __init__(self, vision_engine, sql_repo, vector_repo, llm_engine):
         self.vision_engine = vision_engine
         self.sql_repo = sql_repo
@@ -45,7 +71,9 @@ class ContextOrchestrator:
         if weight > 0 and height > 0 and age > 0:
             try:
                 bmi_res = NutritionCalculator.calculate_bmi(weight, height)
-                user_data["bmi"] = bmi_res["bmi"]
+                # Hỗ trợ an toàn cho cả trường hợp kết quả trả về là float hoặc dict
+                bmi_val = bmi_res.get("bmi", bmi_res) if isinstance(bmi_res, dict) else bmi_res
+                user_data["bmi"] = bmi_val
                 
                 bmr = NutritionCalculator.calculate_bmr(weight, height, age, gender)
                 user_data["bmr"] = bmr
@@ -53,9 +81,11 @@ class ContextOrchestrator:
                 tdee = NutritionCalculator.calculate_tdee(bmr, activity_level)
                 user_data["tdee"] = tdee
                 
-                body_fat = NutritionCalculator.estimate_body_fat(bmi_res["bmi"], age, gender)
+                body_fat = NutritionCalculator.estimate_body_fat(bmi_val, age, gender)
                 user_data["body_fat_percent"] = body_fat
-            except Exception:
+            except Exception as e:
+                import logging
+                logging.error(f"Lỗi tính toán chỉ số cơ thể: {e}")
                 pass  # Bỏ qua nếu có lỗi ngoại lệ (vd: thiếu constants)
 
         return self.sql_repo.upsert_user_profile(user_id, user_data)
@@ -125,11 +155,21 @@ class ContextOrchestrator:
 
         # 3. Tra cứu dinh dưỡng & tính toán - calculator.py (gọi qua repo)
         for item in vision_res.detected_items:
-            data = self.sql_repo.get_nutrition_ref(item.food_name)
+            raw_yolo_name = getattr(item, "food_name", "")
+            
+            # Bước 3.1: Vẫn dùng tên không dấu của YOLO để tra cứu DB an toàn
+            data = self.sql_repo.get_nutrition_ref(raw_yolo_name)
             if data:
                 for key, val in data.items():
                     if hasattr(item, key):  # Chốt chặn an toàn: Chỉ gán nếu trường tồn tại trong Schema
                         setattr(item, key, val)
+                        
+            # Bước 3.2: CHUẨN HÓA TÊN CÓ DẤU TRƯỚC KHI LƯU VÀO NHẬT KÝ VÀ UI
+            norm_name = raw_yolo_name.lower().strip()
+            if norm_name in self.FOOD_NAME_MAP:
+                item.food_name = self.FOOD_NAME_MAP[norm_name]
+            elif norm_name:
+                item.food_name = raw_yolo_name.capitalize() # Viết hoa chữ cái đầu nếu không có trong Map
         
         vision_res.update_totals()
         
@@ -140,10 +180,7 @@ class ContextOrchestrator:
 
     def get_personalized_advice(self, user_id: int, user_query: str, current_vision_res=None, recent_chat=None, user_lat=None, user_lon=None):
         """Luồng 2C: Gom Context (Profile + Diary + Season + RAG) -> LLM"""
-        # 1. Lấy Profile & Nhật ký gần đây
-        profile = self.sql_repo.get_user_profile(user_id)
-
-        # 1.1. Chặn truy vấn y khoa/không an toàn trước khi vào LLM.
+        # Bước 1: Chặn các truy vấn không an toàn trước khi xử lý
         safety_result = self.safety_router.route(user_query)
         if safety_result.get("is_unsafe"):
             def safety_stream():
@@ -153,42 +190,50 @@ class ContextOrchestrator:
                     time.sleep(0.015)
             return (safety_stream(), {})
 
+        # --- TỐI ƯU HÓA: PHÂN TÍCH Ý ĐỊNH NGƯỜI DÙNG ĐỂ GIẢM TẢI TRUY VẤN ---
+        query_norm = self.llm_engine._normalize_for_intent(user_query) if self.llm_engine else user_query.lower()
+        
+        # Bước 2: Lấy context mặc định (luôn cần)
+        profile = self.sql_repo.get_user_profile(user_id)
         history = self.sql_repo.get_recent_diary(user_id, limit=5)
         
-        # 2. Lấy rau + đặc sản theo vùng và thời gian hiện tại
-        
+        # Chuẩn hóa lại lịch sử ngay trong lúc nạp Context (đề phòng dữ liệu cũ từ DB chưa có dấu)
+        for h in history:
+            fname = str(h.get("food_name", "")).lower().strip()
+            if fname in self.FOOD_NAME_MAP:
+                h["food_name"] = self.FOOD_NAME_MAP[fname]
         current_time = datetime.now().strftime("%d/%m/%Y %H:%M")
-        current_weather = WeatherService.get_current_weather(lat=user_lat, lon=user_lon)
-
-        seasonal_info = self.sql_repo.get_personalized_seasonal_recommendations(
-            user_id=user_id,
-            at_time=None,
-            limit=6,
-            lat=user_lat,
-        )
         
-        # 3. Truy xuất tri thức y khoa - RAG
-        if self.vector_repo is not None:
+        # Bước 3: Lấy context có điều kiện dựa trên ý định của câu hỏi
+        kb_context = {}
+        seasonal_info = {}
+        structured_facts = []
+        current_weather = "Không rõ" # Chỉ lấy khi cần
+
+        # Ý định gợi ý món ăn (hôm nay ăn gì, gợi ý món) -> Cần thông tin mùa vụ + thời tiết
+        is_suggestion_query = bool(re.search(r"\b(goi y|an gi|mon nao|thuc don|hom nay)\b", query_norm))
+        if is_suggestion_query:
+            seasonal_info = self.sql_repo.get_personalized_seasonal_recommendations(
+                user_id=user_id, at_time=None, limit=6, lat=user_lat
+            )
+            current_weather = WeatherService.get_current_weather(lat=user_lat, lon=user_lon)
+
+        # Ý định tra cứu kiến thức (hỏi đáp, định nghĩa, so sánh) -> Cần RAG
+        is_knowledge_query = bool(re.search(r"\b(la gi|the nao|co tot khong|nen an|can tranh|so sanh|vi sao|tai sao)\b", query_norm))
+        if self.vector_repo and (is_knowledge_query or not is_suggestion_query): # Chạy RAG nếu là câu hỏi kiến thức hoặc không rõ ý định
             kb_context = self.vector_repo.search(user_query)
-        else:
-            kb_context = {
-                "documents": [],
-                "metadatas": [],
-                "ids": [],
-                "notice": "Vector repository chưa khởi tạo, đang chạy chế độ không RAG.",
-            }
-
-        structured_facts = self.sql_repo.search_nutrition_facts(user_query, limit=5)
-
-        # Với câu hỏi cần số liệu mà không có dữ liệu tin cậy thì không gọi LLM để tránh bịa số.
+        
+        # Ý định tra cứu dinh dưỡng cụ thể (bao nhiêu calo) -> Cần DB dinh dưỡng
         if self._is_numeric_nutrition_query(user_query):
+            structured_facts = self.sql_repo.search_nutrition_facts(user_query, limit=5)
+            # Với câu hỏi cần số liệu mà không có dữ liệu tin cậy thì không gọi LLM để tránh bịa số.
             has_docs = bool(kb_context.get("documents"))
             if not structured_facts and not has_docs:
-                return (
-                    "Data not available: Hiện chưa có dữ liệu định lượng đáng tin cậy cho truy vấn này."
-                )
+                def numeric_fallback_stream():
+                    yield "Hiện tại EcoNutri chưa có dữ liệu dinh dưỡng đáng tin cậy cho món ăn bạn hỏi. Bạn có thể thử với các món phổ biến khác nhé."
+                return (numeric_fallback_stream(), {})
         
-        # 4. Hợp nhất ngữ cảnh thành Prompt (Dựa trên configs/prompts.yaml)
+        # Bước 4: Hợp nhất toàn bộ ngữ cảnh đã thu thập
         context = {
             "current_time": current_time,
             "current_weather": current_weather,
@@ -201,7 +246,7 @@ class ContextOrchestrator:
             "recent_chat": (recent_chat or [])[-8:],
         }
         
-        # 5. Thực thi LLM (Qwen 2.5/3.5 GGUF)
+        # Bước 5: Thực thi LLM
         if self.llm_engine is not None:
             # Trả về stream và context để UI xử lý hậu kỳ (gắn suffix)
             if hasattr(self.llm_engine, "generate_stream"):

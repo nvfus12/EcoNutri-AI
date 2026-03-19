@@ -147,7 +147,7 @@ def bootstrap_system():
     return orchestrator, status
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner="Đang khởi tạo hệ thống AI (YOLO, LLM, VectorDB)... Vui lòng đợi!")
 def get_cached_system():
     return bootstrap_system()
 
@@ -349,18 +349,15 @@ if not st.session_state.location_asked and (user_lat is None or user_lon is None
                         st.session_state.user_lat = new_lat
                         st.session_state.user_lon = new_lon
                         st.session_state.location_asked = True
-                        st.success(f"Đã xác định vị trí thành công (Lat: {new_lat}, Lon: {new_lon})!")
-                        time.sleep(1)
+                        st.toast(f"Đã xác định vị trí thành công!", icon="✅")
                         st.rerun()
                     else:
-                        st.error("Dịch vụ IP không trả về kết quả.")
                         st.session_state.location_asked = True
-                        time.sleep(1)
+                        st.toast("Dịch vụ IP không trả về kết quả.", icon="❌")
                         st.rerun()
             except Exception as e:
-                st.error(f"Lỗi mạng khi lấy vị trí: {e}")
                 st.session_state.location_asked = True
-                time.sleep(1)
+                st.toast(f"Lỗi mạng khi lấy vị trí: {e}", icon="❌")
                 st.rerun()
                 
         if st.button("❌ Bỏ qua (Tôi sẽ tự nhập sau)", use_container_width=True):
@@ -664,8 +661,7 @@ with tab3:
                         "allergies": allergies, "medical_conditions": medical_conditions,
                     },
                 )
-                st.success("Đã lưu hồ sơ vào database.")
-                time.sleep(0.5)
+                st.toast("Đã lưu hồ sơ vào database.", icon="💾")
                 st.rerun()
 
 with tab4:

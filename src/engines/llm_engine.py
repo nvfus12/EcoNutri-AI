@@ -140,17 +140,29 @@ class LocalLLMEngine:
         history_calories = sum(float(item.get("calories", 0) or 0) for item in recent_history)
 
         # TỐI ƯU HÓA: Chỉ chèn các context có dữ liệu thật để giảm tải thời gian đọc của CPU Cloud
+        # Đồng thời tạo bảng thuật ngữ để LLM không viết sai chính tả
         context_parts = [f"Câu hỏi người dùng: {query}"]
+
+        # Tạo bảng thuật ngữ (glossary) để LLM viết đúng chính tả
+        region_map = {"bac": "Bắc", "trung": "Trung", "nam": "Nam"}
+        region_name = region_map.get(seasonal.get("region_code"))
+        glossary = []
+        if region_name:
+            glossary.append(f"Vùng miền: {region_name}")
+        all_foods = veg + specs
+        if all_foods:
+            # Lọc các tên duy nhất và giữ nguyên thứ tự
+            unique_foods = list(dict.fromkeys(all_foods))
+            glossary.append(f"Tên món ăn/rau củ: {', '.join(unique_foods)}")
+        if glossary:
+            context_parts.append(f"[Bảng thuật ngữ]: {'; '.join(glossary)}")
+
         if profile.get('age'):
             context_parts.append(f"Hồ sơ: age={profile.get('age')}, gender={profile.get('gender')}, goal={profile.get('goal')}, activity={profile.get('activity_level')}")
         if history_foods:
             context_parts.append(f"Nhật ký gần đây: {history_foods} (Calo: {round(history_calories, 1)})")
         if current_meal != "N/A":
             context_parts.append(f"Bữa ăn: {current_meal}")
-        if veg or specs:
-            context_parts.append(f"Mùa/vùng: {seasonal.get('season')}, {seasonal.get('region_code')}")
-            if veg: context_parts.append(f"Rau gợi ý: {', '.join(veg)}")
-            if specs: context_parts.append(f"Đặc sản: {', '.join(specs)}")
         if docs:
             context_parts.append(f"Tài liệu y khoa (RAG): {docs}")
             
@@ -164,6 +176,15 @@ class LocalLLMEngine:
             system_prompt += "\n" + self.prompts.get("weekly_plan_prompt", "")
         else:
             system_prompt += "\n" + self.prompts.get("daily_advice_prompt", "")
+
+        # Bổ sung các chỉ thị ép buộc (override) văn phong tự nhiên, tránh cứng nhắc
+        system_prompt += (
+            "\n\n[HƯỚNG DẪN VĂN PHONG - BẮT BUỘC]\n"
+            "- Trả lời tự nhiên, thân thiện, đồng cảm và linh hoạt như một chuyên gia tư vấn.\n"
+            "- KHÔNG BAO GIỜ sử dụng các cụm từ cứng nhắc như 'Tóm tắt ngắn gọn vấn đề', 'Gợi ý cụ thể', hay 'Lưu ý/Cảnh báo'.\n"
+            "- Đa dạng hóa câu trả lời, tuyệt đối không lặp lại y hệt định dạng của các câu trả lời trước.\n"
+            "- LUÔN LUÔN viết đúng chính tả tiếng Việt có dấu cho tên món ăn, địa danh (Ví dụ: 'Bún chả Hà Nội', không viết 'bun cha ha noi'). Dựa vào [Bảng thuật ngữ] nếu có.\n"
+        )
 
         # Lắp ráp thủ công chuỗi Prompt theo chuẩn ChatML
         raw_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
@@ -184,9 +205,12 @@ class LocalLLMEngine:
             stream=True,  # Bật chế độ streaming
             max_tokens=800,
             temperature=settings.LLM_TEMPERATURE,
-            top_p=0.85,
-            frequency_penalty=0.1,
-            stop=["\n\nUser:", "\n\nQ:", "(Hồ sơ)", "(EcoNutri)", "<|im_end|>"],
+            top_p=0.9,              # Nâng top_p để câu văn mượt mà và đa dạng hơn
+            top_k=40,               # Thêm top_k để chặn LLM sinh ra các từ vô nghĩa
+            repeat_penalty=1.15,    # Thêm phạt lặp lại đặc trưng của Llama.cpp để triệt để giảm lặp ý câu trả lời trước
+            frequency_penalty=0.5,  # Tăng thêm hình phạt tần suất
+            presence_penalty=0.5,   # Tăng thêm hình phạt hiện diện
+            stop=["\n\nUser:", "\n\nQ:", "(Hồ sơ)", "(EcoNutri)", "<|im_end|>", "<|endoftext|>"],
         )
         
         # Yield từng token từ stream
