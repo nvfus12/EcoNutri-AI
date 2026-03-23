@@ -406,7 +406,7 @@ with tab1:
         if input_source == "📁 Tải ảnh lên":
             raw_image = st.file_uploader("Kéo thả hoặc chọn file ảnh món ăn...", type=["jpg", "jpeg", "png", "webp"])
             if raw_image:
-                st.image(raw_image, caption="Ảnh chuẩn bị phân tích", use_container_width=True)
+                st.image(raw_image, caption="Ảnh chuẩn bị phân tích", use_column_width=True)
         else:
             raw_image = st.camera_input("Chụp ảnh món ăn")
 
